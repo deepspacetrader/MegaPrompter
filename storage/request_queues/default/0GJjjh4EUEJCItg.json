@@ -1,9 +1,0 @@
-{
-	"id": "0GJjjh4EUEJCItg",
-	"json": "{\"id\":\"0GJjjh4EUEJCItg\",\"url\":\"https://github.com/trending\",\"loadedUrl\":\"https://github.com/trending\",\"uniqueKey\":\"https://github.com/trending\",\"method\":\"GET\",\"noRetry\":false,\"retryCount\":0,\"errorMessages\":[],\"headers\":{},\"userData\":{\"__crawlee\":{\"state\":4}},\"handledAt\":\"2026-01-23T19:26:13.748Z\"}",
-	"method": "GET",
-	"orderNo": null,
-	"retryCount": 0,
-	"uniqueKey": "https://github.com/trending",
-	"url": "https://github.com/trending"
-}
