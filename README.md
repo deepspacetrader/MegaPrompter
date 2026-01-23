@@ -1,4 +1,4 @@
-# Mega Prompts
+# Mega Prompter
 App with drill down UI style buttons which reveal more buttons for detailed scope requirements of any given software project for an Ai to build.
 
 More clicking less typing for users to make their selections about what they want to build.
@@ -12,6 +12,51 @@ Self guided process of step by step selection of project requirements to generat
 Also include a input fields or text areas for the user to add their own custom requirements but categorized and structured in a way that makes sense to the user.
 
 Expect users to make web apps, mobile apps, desktop software, games, tools, etc. The sky's the limit not just websites, but must be digital format since its intended for an Ai to build.
+
+# Getting Started
+
+## Prerequisites
+- Node.js (v18 or higher)
+- Ollama installed and running locally (for Generate Ideas With AI feature)
+- `deepseek-r1:8b` model installed in Ollama
+
+## Installation
+```bash
+npm install
+```
+
+## Running the Application
+
+### Option 1: Frontend Only
+For basic functionality without the Generate Ideas With AI trend analysis:
+```bash
+npm run dev
+```
+
+### Option 2: Full Application (Recommended)
+To enable the Generate Ideas With AI feature that synthesizes live trends into project ideas:
+
+1. **Start the ideas server** (in a separate terminal):
+```bash
+npm run start-ideas-server
+```
+This starts the backend server on port 3001 that fetches trends and generates AI-powered project ideas.
+
+2. **Start the frontend** (in another terminal):
+```bash
+npm run dev
+```
+
+The frontend will run on port 5173 (or next available port) and connect to the ideas server for the Generate Ideas With AI feature.
+
+## Generate Ideas With AI Feature
+The "Generate Ideas With AI" button requires the ideas server to be running. It:
+- Fetches trending topics from TechCrunch, The Verge, Wired, HackerNews, GitHub, and X/Twitter
+- Uses local Ollama (`deepseek-r1:8b` model) to synthesize trends into project ideas
+- Caches results for 6 hours to improve performance
+- Can be toggled between cached (safe) and live data modes
+
+If you see "Failed to sync trends: TypeError: Failed to fetch" error, make sure the ideas server is running with `npm run start-ideas-server`.
 
 # Tech Stack
 - TypeScript

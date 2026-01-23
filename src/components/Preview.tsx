@@ -29,7 +29,7 @@ export const Preview = ({
         return (
             <div className="glass-card rounded-3xl p-8 flex flex-col gap-6">
                 <div className="flex items-center justify-between">
-                    <h2 className="text-lg font-bold flex items-center gap-3">
+                    <h2 className="step-4 text-lg font-bold flex items-center gap-3">
                         <Code2 className="w-6 h-6 text-primary" />
                         JSON Preview
                     </h2>
@@ -97,10 +97,10 @@ export const Preview = ({
                     <label className="text-[10px] text-muted-foreground uppercase font-black tracking-widest">API Endpoint</label>
                     <div className="flex gap-2">
                         <div className="flex-1 bg-black/40 rounded-xl px-4 py-3 text-xs font-mono text-primary truncate border border-white/5">
-                            https://api.megaprompts.com/v1/prompt/{generatedResult.id}
+                            http://localhost:5173/v1/prompt/{generatedResult.id}
                         </div>
                         <button
-                            onClick={() => copyToClipboard(`https://api.megaprompts.com/v1/prompt/${generatedResult.id}`, 'url')}
+                            onClick={() => copyToClipboard(`http://localhost:5173/v1/prompt/${generatedResult.id}`, 'url')}
                             className="p-3 bg-white/5 hover:bg-white/10 rounded-xl border border-white/10 transition-all text-primary"
                         >
                             {copiedField === 'url' ? <Check className="w-4 h-4" /> : <Link2 className="w-4 h-4" />}
@@ -142,7 +142,7 @@ export const Preview = ({
                     Ready for integration. You can fetch this prompt via CURL or copy it directly.
                 </p>
                 <button
-                    onClick={() => window.open(`https://api.megaprompts.com/v1/prompt/${generatedResult.id}`, '_blank')}
+                    onClick={() => window.open(`http://localhost:3001/api/prompts/${generatedResult.id}`, '_blank')}
                     className="w-full py-4 rounded-xl border border-white/10 hover:bg-white/5 text-xs font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2"
                 >
                     Open in API Explorer

@@ -1,0 +1,440 @@
+import express from 'express';
+import cors from 'cors';
+import { PlaywrightCrawler } from 'crawlee';
+import axios from 'axios';
+import RSSParser from 'rss-parser';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const app = express();
+const parser = new RSSParser();
+app.use(cors({
+    origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
+    credentials: true
+}));
+app.use(express.json());
+
+const PORT = 3001;
+const OLLAMA_URL = 'http://localhost:11434';
+const DEFAULT_MODEL = 'deepseek-r1:8b';
+// const DEFAULT_MODEL = 'qwen3:8b';
+const CACHE_FILE = path.join(__dirname, 'idea_cache.json');
+const MEGA_PROMPTS_DIR = path.join(__dirname, 'mega_prompts');
+const CACHE_TTL = 1000 * 60 * 60 * 6; // 6 hours
+
+
+const FEEDS = [
+    { name: 'TechCrunch', url: 'https://techcrunch.com/feed/' },
+    { name: 'The Verge', url: 'https://www.theverge.com/rss/index.xml' },
+    { name: 'Wired', url: 'https://www.wired.com/feed/rss' }
+];
+
+// Helper functions for prompt storage
+function ensureMegaPromptsDir() {
+    if (!fs.existsSync(MEGA_PROMPTS_DIR)) {
+        fs.mkdirSync(MEGA_PROMPTS_DIR, { recursive: true });
+    }
+}
+
+async function generateIdeasFromTrends(trends) {
+    if (trends.length === 0) return [];
+
+    const prompt = `
+    ### GENERATE IDEAS WITH AI MODE ###
+    You are a visionary Product Architect. 
+    
+    RAW SIGNALS:
+    ${trends.join('\n')}
+
+    ### MISSION ###
+    1. Study the RAW SIGNALS.
+    2. Synthesize them into specific, high-concept software project ideas that are actionable, innovative, and market-ready. They should solve a problem or fill a gap in the market by creating value for the potential users by creatively solving their problems.
+    3. Ideas should be centered around some sort of software application or digital service. Should not be a physical product.
+    4. CRITICAL: NEVER use these forbidden words: "Product Name", "AI App", "Niche Implementation", "Creative Product", "Strategic Feature", "unique-slug", "s1", "s2".
+    5. Provide unique, bold, original industry-specific names (e.g., "Vector Safe", "Quant Flow", "Bio Nexus").
+    
+    ### OUTPUT FORMAT (JSON ONLY) ###
+    {
+      "ideas": [
+        {
+          "id": "meaningful-slug-1", 
+          "label": "BOLD PRODUCT NAME",
+          "description": "Brief one-sentence description",
+          "features": [
+            {"id": "feature-slug-1", "label": "SPECIFIC HIGH-LEVEL FEATURE"},
+            {"id": "feature-slug-2", "label": "SPECIFIC HIGH-LEVEL FEATURE"},
+            {"id": "feature-slug-3", "label": "SPECIFIC HIGH-LEVEL FEATURE"},
+            {"id": "feature-slug-4", "label": "SPECIFIC HIGH-LEVEL FEATURE"}
+          ]
+        }
+      ]
+    }
+
+    Generate as many features as possible.    
+    
+    Response must be ONLY JSON. No preamble. NO PLACEHOLDERS.
+    `;
+
+    try {
+        console.log(`Generating ideas with Ai now in progress using: ${DEFAULT_MODEL}...`);
+        const response = await axios.post(`${OLLAMA_URL}/api/generate`, {
+            model: DEFAULT_MODEL,
+            prompt: prompt,
+            stream: false,
+            think: true,
+            format: {
+                type: 'object',
+                properties: {
+                    ideas: {
+                        type: 'array',
+                        items: {
+                            type: 'object',
+                            properties: {
+                                id: { type: 'string' },
+                                label: { type: 'string' },
+                                description: { type: 'string' },
+                                features: {
+                                    type: 'array',
+                                    items: {
+                                        type: 'object',
+                                        properties: {
+                                            id: { type: 'string' },
+                                            label: { type: 'string' }
+                                        }
+                                    }
+                                }
+                            },
+                            required: ['id', 'label', 'description', 'features']
+                        }
+                    }
+                },
+                required: ['ideas']
+            }
+        });
+
+        if (response.data.thinking) {
+            console.log('\x1b[36m%s\x1b[0m', '--- THINKING ---');
+            console.log(response.data.thinking);
+            console.log('\x1b[36m%s\x1b[0m', '-------------------------');
+        }
+
+        const parsed = JSON.parse(response.data.response);
+        return Array.isArray(parsed.ideas) ? parsed.ideas : [];
+    } catch (error) {
+        console.error('Generating Ideas with Ai failed:', error.message);
+        return [];
+    }
+}
+
+app.get('/api/trends', async (req, res) => {
+    // 0. Check Cache
+    try {
+        if (fs.existsSync(CACHE_FILE)) {
+            const cacheData = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf-8'));
+            const now = Date.now();
+            if (now - cacheData.timestamp < CACHE_TTL && req.query.force !== 'true') {
+                console.log('Serving ideas from cache...');
+                return res.json(cacheData.ideas);
+            }
+        }
+    } catch (e) {
+        console.error('Cache read error:', e.message);
+    }
+
+    const headlines = [];
+
+    // 1. Fetch RSS Feeds (Fast)
+    console.log('Fetching RSS feeds...');
+    for (const feed of FEEDS) {
+        try {
+            const data = await parser.parseURL(feed.url);
+            const items = data.items.slice(0, 5).map(item => `[${feed.name}] ${item.title}`);
+            headlines.push(...items);
+        } catch (e) {
+            console.error(`RSS Fail [${feed.name}]:`, e.message);
+        }
+    }
+
+    // 2. Playwright Scrape (Custom)
+    const crawler = new PlaywrightCrawler({
+        maxRequestsPerCrawl: 10,
+        requestHandlerTimeoutSecs: 60,
+        async requestHandler({ page, request }) {
+            const url = request.url;
+            console.log(`Crawling: ${url}`);
+
+            if (url.includes('ycombinator.com')) {
+                try {
+                    await page.waitForSelector('.titleline', { timeout: 5000 });
+                    const titles = await page.$$eval('.titleline > a', (els) =>
+                        els.map(el => `[HackerNews] ${el.textContent}`).slice(0, 10)
+                    );
+                    headlines.push(...titles);
+                } catch (e) { console.error('HN Timeout'); }
+            }
+            else if (url.includes('github.com')) {
+                try {
+                    await page.waitForSelector('article.Box-row', { timeout: 8000 });
+                    const repos = await page.$$eval('article.Box-row h2 a', (els) =>
+                        els.map(el => `[GitHub Trending] ${el.textContent.trim().replace(/\s+/g, ' ')}`).slice(0, 8)
+                    );
+                    headlines.push(...repos);
+                } catch (e) { console.error('GitHub Timeout'); }
+            }
+            else if (url.includes('trends24.in')) {
+                try {
+                    // Twitter trends without API
+                    await page.waitForSelector('.trend-card', { timeout: 8000 });
+                    const xTrends = await page.$$eval('.trend-card:first-child .trend-name a', (els) =>
+                        els.map(el => `[X-Social-Trend] ${el.textContent}`).slice(0, 10)
+                    );
+                    headlines.push(...xTrends);
+                } catch (e) { console.error('X-Trends Timeout'); }
+            }
+        },
+    });
+
+    try {
+        await crawler.run([
+            'https://news.ycombinator.com',
+            'https://github.com/trending',
+            'https://trends24.in/united-states/'
+        ]);
+
+        console.log(`Gathered ${headlines.length} signals. Transmuting into ideas...`);
+        const ideas = await generateIdeasFromTrends(headlines);
+
+        // 4. Save to Cache
+        if (ideas.length > 0) {
+            try {
+                fs.writeFileSync(CACHE_FILE, JSON.stringify({
+                    timestamp: Date.now(),
+                    ideas: ideas
+                }, null, 2));
+                console.log('Results cached successfully.');
+            } catch (e) {
+                console.error('Cache write error:', e.message);
+            }
+        }
+
+        res.json(ideas);
+    } catch (error) {
+        console.error('Crawl failed:', error);
+        res.status(500).json({ error: 'System error during ideation' });
+    }
+});
+
+// Save prompt endpoint
+app.post('/api/prompts', (req, res) => {
+    try {
+        const { id, prompt, selections, selectedModel, timestamp } = req.body;
+        
+        if (!id || !prompt) {
+            return res.status(400).json({ error: 'Missing required fields: id, prompt' });
+        }
+
+        // Ensure the mega prompts directory exists
+        ensureMegaPromptsDir();
+
+        // Create the prompt data object
+        const promptData = {
+            id,
+            prompt,
+            selections: selections || [],
+            selectedModel: selectedModel || DEFAULT_MODEL,
+            timestamp: timestamp || new Date().toISOString()
+        };
+
+        // Save to individual file with ID appended
+        const fileName = `megaPrompt-${id}.json`;
+        const filePath = path.join(MEGA_PROMPTS_DIR, fileName);
+        
+        try {
+            fs.writeFileSync(filePath, JSON.stringify(promptData, null, 2));
+            console.log(`Saved mega prompt to file: ${fileName}`);
+            res.json({ success: true, id, fileName });
+        } catch (error) {
+            console.error('Failed to save mega prompt file:', error.message);
+            res.status(500).json({ error: 'Failed to save mega prompt file' });
+        }
+    } catch (error) {
+        console.error('Error saving prompt:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Get prompt endpoint
+app.get('/api/prompts/:id', (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        // Read from individual mega prompt file
+        const fileName = `megaPrompt-${id}.json`;
+        const filePath = path.join(MEGA_PROMPTS_DIR, fileName);
+        
+        if (fs.existsSync(filePath)) {
+            try {
+                const promptData = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+                console.log(`Retrieved mega prompt from file: ${fileName}`);
+                res.json(promptData);
+            } catch (error) {
+                console.error('Error reading mega prompt file:', error.message);
+                res.status(500).json({ error: 'Error reading prompt file' });
+            }
+        } else {
+            res.status(404).json({ error: 'Prompt not found' });
+        }
+    } catch (error) {
+        console.error('Error retrieving prompt:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// AI-powered tech stack selection endpoint
+app.post('/api/auto-select-stack', async (req, res) => {
+    try {
+        const { selections } = req.body;
+        
+        if (!selections || !Array.isArray(selections)) {
+            return res.status(400).json({ error: 'Selections array is required' });
+        }
+
+        // Create a summary of user's current selections
+        const userGoals = selections.map(s => `${s.category}: ${s.label}`).join('\n');
+        
+        const prompt = `
+        You are a senior software architect and tech stack expert. Analyze the user's project goals and recommend the optimal tech stack.
+
+        USER'S CURRENT SELECTIONS:
+        ${userGoals}
+
+        Your task:
+        1. Analyze the user's project requirements and goals
+        2. Recommend the best tech stack from the available options
+        3. Consider scalability, performance, development experience, and project type
+        4. Return ONLY a JSON array of recommended selections
+
+        AVAILABLE OPTIONS TO CHOOSE FROM:
+        - Platform: web, mobile, game, desktop, tool
+        - Frontend: react, nextjs, vue, svelte, solid, astro, typescript
+        - Backend: node, hono, nest, python_fastapi, go_chi, trpc, graphql
+        - Database: supabase, firebase, postgresql, mongodb, mysql, redis
+        - UI: tailwind, shadcn, chakra, radix, framer, lucide
+        - AI/ML: openai, anthropic, ollama, langchain, dalle, midjourney, elevenlabs, whisper, vision, sentiment, pinecone, weaviate, chroma
+        - Mobile: rn, flutter, swiftui, expo, push, camera, maps, biometrics
+        - Game: unity, godot, phaser, unreal, multiplayer, physics, save_system, inventory
+        - Design: minimal, brutalist, glassmorphism, material, geometric, monochrome
+        - Auth: clerk, auth0, nextauth, supabase_auth
+        - Payment: stripe, lemonsqueezy, paypal
+        - CMS: sanity, strapi, wordpress
+        - Features: pwa, seo, i18n, docker, cicd, tests, analytics
+
+        RESPONSE FORMAT (JSON ONLY):
+        [
+            {"id": "option_id", "category": "Category Name", "label": "Option Label"},
+            {"id": "option_id", "category": "Category Name", "label": "Option Label"}
+        ]
+
+        CRITICAL RULES:
+        - Choose 5-10 most relevant options for a complete stack
+        - Always include a platform (web/mobile/game/desktop/tool)
+        - Include appropriate frontend, backend, and database options
+        - Add relevant UI/styling and authentication options
+        - Consider AI/ML integrations if relevant
+        - For web apps: prefer modern stacks like Next.js/React with TypeScript
+        - For mobile: React Native or Flutter with Expo
+        - For games: Unity or Phaser depending on platform
+        - For desktop: Electron or Tauri
+        - Return ONLY the JSON array, no explanations
+        `;
+
+        console.log('Getting AI tech stack recommendations...');
+        
+        const response = await axios.post(`${OLLAMA_URL}/api/generate`, {
+            model: DEFAULT_MODEL,
+            prompt: prompt,
+            stream: false,
+            format: {
+                type: 'array',
+                items: {
+                    type: 'object',
+                    properties: {
+                        id: { type: 'string' },
+                        category: { type: 'string' },
+                        label: { type: 'string' }
+                    },
+                    required: ['id', 'category', 'label']
+                }
+            }
+        });
+
+        if (response.data.thinking) {
+            console.log('\x1b[36m%s\x1b[0m', '--- AI THINKING ---');
+            console.log(response.data.thinking);
+            console.log('\x1b[36m%s\x1b[0m', '---------------------');
+        }
+
+        let recommendations;
+        try {
+            recommendations = JSON.parse(response.data.response);
+        } catch (parseError) {
+            console.error('Failed to parse AI response:', parseError.message);
+            // Fallback to basic recommendations
+            recommendations = [
+                { id: 'web', category: 'Platform', label: 'Web Application' },
+                { id: 'nextjs', category: 'Frontend Framework', label: 'Next.js' },
+                { id: 'typescript', category: 'Frontend Framework', label: 'TypeScript' },
+                { id: 'node', category: 'Backend & API', label: 'Node.js / Express' },
+                { id: 'supabase', category: 'Database / Storage', label: 'Supabase' },
+                { id: 'tailwind', category: 'UI & Styling', label: 'Tailwind CSS' }
+            ];
+        }
+
+        console.log(`AI recommended ${recommendations.length} tech stack options`);
+        res.json(recommendations);
+
+    } catch (error) {
+        console.error('AI tech stack selection failed:', error.message);
+        
+        // Fallback recommendations
+        const fallbackStack = [
+            { id: 'web', category: 'Platform', label: 'Web Application' },
+            { id: 'nextjs', category: 'Frontend Framework', label: 'Next.js' },
+            { id: 'typescript', category: 'Frontend Framework', label: 'TypeScript' },
+            { id: 'node', category: 'Backend & API', label: 'Node.js / Express' },
+            { id: 'supabase', category: 'Database / Storage', label: 'Supabase' },
+            { id: 'tailwind', category: 'UI & Styling', label: 'Tailwind CSS' }
+        ];
+        
+        res.json(fallbackStack);
+    }
+});
+
+// Check cache endpoint
+app.get('/api/cache-check', (req, res) => {
+    try {
+        if (fs.existsSync(CACHE_FILE)) {
+            const cacheData = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf-8'));
+            const now = Date.now();
+            const isValid = now - cacheData.timestamp < CACHE_TTL;
+            res.json({ 
+                exists: true, 
+                valid: isValid,
+                timestamp: cacheData.timestamp
+            });
+        } else {
+            res.json({ exists: false, valid: false });
+        }
+    } catch (error) {
+        console.error('Cache check error:', error.message);
+        res.json({ exists: false, valid: false });
+    }
+});
+
+app.listen(PORT, () => {
+    console.log(`Generate Ideas With AI Server running at http://localhost:${PORT}`);
+});

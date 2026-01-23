@@ -20,7 +20,7 @@ export const ProjectRequirements = ({
     return (
         <div className="glass-card rounded-3xl p-8 flex flex-col gap-6">
             <div className="flex items-center justify-between">
-                <h2 className="text-lg font-bold flex items-center gap-3">
+                <h2 className="step-3 text-lg font-bold flex items-center gap-3">
                     <Layers className="w-6 h-6 text-primary" />
                     Project Requirements
                 </h2>

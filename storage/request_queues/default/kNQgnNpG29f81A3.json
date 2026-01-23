@@ -1,0 +1,9 @@
+{
+	"id": "kNQgnNpG29f81A3",
+	"json": "{\"id\":\"kNQgnNpG29f81A3\",\"url\":\"https://trends24.in/united-states/\",\"loadedUrl\":\"https://trends24.in/united-states/\",\"uniqueKey\":\"https://trends24.in/united-states\",\"method\":\"GET\",\"noRetry\":false,\"retryCount\":0,\"errorMessages\":[],\"headers\":{},\"userData\":{\"__crawlee\":{\"state\":4}},\"handledAt\":\"2026-01-23T19:26:53.931Z\"}",
+	"method": "GET",
+	"orderNo": null,
+	"retryCount": 0,
+	"uniqueKey": "https://trends24.in/united-states",
+	"url": "https://trends24.in/united-states/"
+}

@@ -47,3 +47,34 @@
     animation: logo-spin infinite 20s linear;
   }
 }
+
+.step-1,
+.step-2,
+.step-3,
+.step-4{
+  &::before{
+    color: #fff;
+    font-size: 1.25rem;
+  }
+}
+
+.step-1{
+  &::before{
+    content: "Step 1";
+  }
+}
+.step-2{
+  &::before{
+    content: "Step 2";
+  }
+}
+.step-3{
+  &::before{
+      content: "Step 3";
+    }
+}
+.step-4{
+  &::before{
+      content: "Step 4";
+    }
+}
