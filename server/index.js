@@ -1,6 +1,6 @@
 import express from 'express';
 import cors from 'cors';
-import { PlaywrightCrawler } from 'crawlee';
+import { PlaywrightCrawler, SessionPool } from 'crawlee';
 import axios from 'axios';
 import RSSParser from 'rss-parser';
 import fs from 'fs';
@@ -27,6 +27,13 @@ const CACHE_FILE = path.join(__dirname, 'idea_cache.json');
 const MEGA_PROMPTS_DIR = path.join(__dirname, 'mega_prompts');
 const CACHE_TTL = 1000 * 60 * 60 * 6; // 6 hours
 
+// Web scraping targets for additional trend data
+const SCRAPING_TARGETS = [
+    { name: 'Hacker News', url: 'https://news.ycombinator.com', selector: '.titleline > a' },
+    { name: 'Product Hunt', url: 'https://www.producthunt.com', selector: '[data-test="post-name"]' },
+    { name: 'GitHub Trending', url: 'https://github.com/trending', selector: 'h2 a' }
+];
+
 
 const FEEDS = [
     { name: 'TechCrunch', url: 'https://techcrunch.com/feed/' },
@@ -41,7 +48,104 @@ function ensureMegaPromptsDir() {
     }
 }
 
-async function generateIdeasFromTrends(trends) {
+// Web scraping function with built-in caching and protection
+async function scrapeTrendingTopics() {
+    const headlines = [];
+    
+    // Create session pool for human-like behavior
+    const sessionPool = new SessionPool({
+        maxPoolSize: 5,
+        sessionOptions: {
+            maxUsageCount: 3, // Rotate sessions after 3 uses
+            sessionPoolOptions: {
+                persistStateKeyValueStoreId: 'scraping-sessions',
+            },
+        },
+    });
+
+    // Configure crawler with built-in protections
+    const crawler = new PlaywrightCrawler({
+        headless: true,
+        maxRequestRetries: 2,
+        requestHandlerTimeoutSecs: 30,
+        navigationTimeoutSecs: 30,
+        maxRequestsPerCrawl: SCRAPING_TARGETS.length,
+        launchContext: {
+            launchOptions: {
+                headless: true,
+                args: [
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--disable-accelerated-2d-canvas',
+                    '--no-first-run',
+                    '--no-zygote',
+                    '--disable-gpu'
+                ]
+            }
+        },
+        preNavigationHooks: [
+            async ({ request, session }) => {
+                // Rotate user agents
+                const userAgents = [
+                    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                ];
+                request.headers = {
+                    ...request.headers,
+                    'User-Agent': userAgents[Math.floor(Math.random() * userAgents.length)],
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                    'Accept-Language': 'en-US,en;q=0.5',
+                    'Accept-Encoding': 'gzip, deflate, br',
+                    'DNT': '1',
+                    'Connection': 'keep-alive',
+                    'Upgrade-Insecure-Requests': '1',
+                };
+            },
+        ],
+        requestHandler: async ({ request, page, sendRequest, log }) => {
+            const target = SCRAPING_TARGETS.find(t => t.url === request.url);
+            if (!target) return;
+
+            try {
+                log.info(`Scraping ${target.name}...`);
+                
+                // Wait for content to load
+                await page.waitForLoadState('domcontentloaded');
+                
+                // Extract headlines
+                const elements = await page.locator(target.selector).all();
+                const texts = await Promise.all(
+                    elements.slice(0, 5).map(el => el.textContent())
+                );
+                
+                const headlinesFromSite = texts
+                    .filter(text => text && text.trim().length > 0)
+                    .map(text => `[${target.name}] ${text.trim()}`);
+                
+                headlines.push(...headlinesFromSite);
+                log.info(`Found ${headlinesFromSite.length} headlines from ${target.name}`);
+                
+                // Add delay between requests to be respectful
+                await page.waitForTimeout(Math.random() * 2000 + 1000); // 1-3 second random delay
+                
+            } catch (error) {
+                log.error(`Error scraping ${target.name}: ${error.message}`);
+            }
+        },
+    });
+
+    // Add targets to crawler
+    await crawler.addRequests(SCRAPING_TARGETS.map(t => t.url));
+    
+    // Run crawler
+    await crawler.run();
+    
+    return headlines;
+}
+
+async function generateIdeasFromTrends(trends, featuresPerIdea = 4) {
     if (trends.length === 0) return [];
 
     const prompt = `
@@ -54,7 +158,7 @@ async function generateIdeasFromTrends(trends) {
     ### MISSION ###
     1. Study the RAW SIGNALS.
     2. Synthesize them into specific, high-concept software project ideas that are actionable, innovative, and market-ready. They should solve a problem or fill a gap in the market by creating value for the potential users by creatively solving their problems.
-    3. Ideas should be centered around some sort of software application or digital service. Should not be a physical product.
+    3. Ideas should be centered around some sort of software application or digital service. Should not be a physical product. Do not rely upon non existing physical hardware technology such as quantum scanners or force fields.
     4. CRITICAL: NEVER use these forbidden words: "Product Name", "AI App", "Niche Implementation", "Creative Product", "Strategic Feature", "unique-slug", "s1", "s2".
     5. Provide unique, bold, original industry-specific names (e.g., "Vector Safe", "Quant Flow", "Bio Nexus").
     
@@ -67,15 +171,13 @@ async function generateIdeasFromTrends(trends) {
           "description": "Brief one-sentence description",
           "features": [
             {"id": "feature-slug-1", "label": "SPECIFIC HIGH-LEVEL FEATURE"},
-            {"id": "feature-slug-2", "label": "SPECIFIC HIGH-LEVEL FEATURE"},
-            {"id": "feature-slug-3", "label": "SPECIFIC HIGH-LEVEL FEATURE"},
-            {"id": "feature-slug-4", "label": "SPECIFIC HIGH-LEVEL FEATURE"}
+            {"id": "feature-slug-2", "label": "SPECIFIC HIGH-LEVEL FEATURE"}
           ]
         }
       ]
     }
 
-    Generate as many features as possible.    
+    Generate exactly ${featuresPerIdea} features per idea. Focus on quality - only include features that are essential and distinct. If ${featuresPerIdea} is too many for a simple idea, make the features more granular. If ${featuresPerIdea} is too few for a complex idea, make the features more comprehensive.    
     
     Response must be ONLY JSON. No preamble. NO PLACEHOLDERS.
     `;
@@ -141,6 +243,9 @@ async function generateIdeasFromTrends(trends) {
 }
 
 app.get('/api/trends', async (req, res) => {
+    // Extract featuresPerIdea from query params, default to 4
+    const featuresPerIdea = parseInt(req.query.featuresPerIdea) || 4;
+    
     // 0. Check Cache
     try {
         if (fs.existsSync(CACHE_FILE)) {
@@ -169,13 +274,21 @@ app.get('/api/trends', async (req, res) => {
         }
     }
 
-    // 2. Skip web scraping for stability - RSS feeds provide sufficient data
-    console.log('Using RSS feeds only for stability...');
+    // 2. Web scraping with built-in protection and caching
+    console.log('Scraping trending topics with protection...');
+    try {
+        const scrapedHeadlines = await scrapeTrendingTopics();
+        headlines.push(...scrapedHeadlines);
+        console.log(`Successfully scraped ${scrapedHeadlines.length} additional headlines`);
+    } catch (error) {
+        console.error('Web scraping failed, falling back to RSS only:', error.message);
+        console.log('Using RSS feeds only as fallback...');
+    }
 
-    console.log(`Gathered ${headlines.length} signals. Transmuting into ideas...`);
+    console.log(`Gathered ${headlines.length} signals. Transmuting into ideas with ${featuresPerIdea} features per idea...`);
     
     try {
-        const ideas = await generateIdeasFromTrends(headlines);
+        const ideas = await generateIdeasFromTrends(headlines, featuresPerIdea);
 
         // 4. Save to Cache
         if (ideas.length > 0) {

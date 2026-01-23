@@ -36,6 +36,7 @@ export const ProjectBuilder = ({
     const [isOtherActiveIdeation, setIsOtherActiveIdeation] = useState(false);
     const [ideationStack, setIdeationStack] = useState<{ title: string; options: ProjectOption[] }[]>([]);
     const [isSyncing, setIsSyncing] = useState(false);
+    const [featuresPerIdea, setFeaturesPerIdea] = useState(4);
     const { useCache, setUseCache } = useCacheCheck();
 
     // Retry utility for API calls
@@ -63,7 +64,9 @@ export const ProjectBuilder = ({
     const fetchLiveTrends = async () => {
         setIsSyncing(true);
         try {
-            const url = `/api/trends${!useCache ? '?force=true' : ''}`;
+            const cacheParam = !useCache ? '?force=true' : '';
+            const featuresParam = featuresPerIdea !== 4 ? (cacheParam ? '&' : '?') + `featuresPerIdea=${featuresPerIdea}` : '';
+            const url = `/api/trends${cacheParam}${featuresParam}`;
             const response = await fetchWithRetry(url);
             if (response.ok) {
                 const data = await response.json();
@@ -153,11 +156,6 @@ export const ProjectBuilder = ({
             });
         });
         
-        // Debug logging to help identify the issue
-        console.log('Selections:', selections);
-        console.log('Filtered selections for directives:', filtered);
-        console.log('Total custom directives:', filtered.length);
-        
         return filtered.length;
     }, [selections]);
 
@@ -237,6 +235,17 @@ export const ProjectBuilder = ({
                                 className="grid grid-cols-1 sm:grid-cols-2 gap-3"
                             >
                             {ideationStack[ideationStack.length - 1].options.map((opt: ProjectOption) => {
+                                // Determine if we are currently viewing the features of an AI-generated idea
+                                const isViewingAIFeatures = ideationStack.length > 1 && 
+                                                         ideationStack[0].title === 'Live Trending Tech' &&
+                                                         ideationStack[ideationStack.length - 1].title !== 'Live Trending Tech';
+
+                                // If we are viewing AI features, only show the features (not other AI ideas)
+                                // Hide any option that has features (which indicates it's an AI idea, not a feature)
+                                if (isViewingAIFeatures && opt.features) {
+                                    return null; 
+                                }
+                                
                                 const active = isSelected(opt);
                                 const selectedCount = getRecursiveSelectedCount(opt);
                                 return (
@@ -246,9 +255,21 @@ export const ProjectBuilder = ({
                                         whileTap={{ scale: 0.98 }}
                                         onClick={() => {
                                             if (opt.features) {
-                                                setIdeationStack([...ideationStack, { title: opt.label, options: opt.features }]);
+                                                // For AI-generated ideas, add features as a new level
+                                                if (ideationStack[0].title === 'Live Trending Tech') {
+                                                    setIdeationStack([...ideationStack, { title: opt.label, options: opt.features }]);
+                                                } else {
+                                                    // For regular navigation, add to selections then navigate
+                                                    handleOptionClick(opt, ideationStack[ideationStack.length - 1].title);
+                                                    setIdeationStack([...ideationStack, { title: opt.label, options: opt.features }]);
+                                                }
                                             } else {
-                                                handleOptionClick(opt, ideationStack[ideationStack.length - 1].title);
+                                                // Check if this is a feature from an AI-generated idea
+                                                const isFeature = ideationStack.length > 1 && 
+                                                                ideationStack[0].title === 'Live Trending Tech' &&
+                                                                ideationStack[ideationStack.length - 2].title !== 'Live Trending Tech';
+                                                const category = isFeature ? 'feature' : ideationStack[ideationStack.length - 1].title;
+                                                handleOptionClick(opt, category);
                                             }
                                         }}
                                         className={`flex items-center gap-3 p-4 rounded-2xl transition-all text-left border ${active
@@ -256,8 +277,8 @@ export const ProjectBuilder = ({
                                             : 'glass-card border-white/5 hover:border-white/10'
                                             }`}
                                     >
-                                        {opt.icon && <div className="p-2 bg-white/5 rounded-xl">{opt.icon}</div>}
-                                        {!opt.icon && <div className="w-1.5 h-1.5 rounded-full bg-primary/60 ml-2" />}
+                                        {opt.icon && <div className="p-2 bg-white/5 rounded-xl flex items-center justify-center">{opt.icon}</div>}
+                                        {!opt.icon && <div className="p-2 bg-orange-500/80 rounded-xl flex items-center justify-center" />}
                                         <div className="flex flex-col">
                                             <span className={`text-sm font-medium ${active ? 'text-primary' : 'text-white/80'}`}>
                                                 {opt.label}
@@ -388,8 +409,22 @@ export const ProjectBuilder = ({
                                     <motion.div
                                         initial={{ opacity: 0 }}
                                         animate={{ opacity: 1 }}
-                                        className="self-end"
+                                        className="self-end flex gap-2"
                                     >
+                                        <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/10 bg-white/5">
+                                            <label className="text-[10px] font-bold tracking-wider text-white/60">
+                                                Features per idea
+                                            </label>
+                                            <input
+                                                type="number"
+                                                min="1"
+                                                max="20"
+                                                value={featuresPerIdea}
+                                                onChange={(e) => setFeaturesPerIdea(Math.max(1, Math.min(20, parseInt(e.target.value) || 4)))}
+                                                className="w-12 bg-white/10 border border-white/20 rounded px-2 py-1 text-xs text-white/80 text-center focus:outline-none focus:border-primary/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                disabled={isSyncing || useCache}
+                                            />
+                                        </div>
                                         <button
                                             onClick={() => setUseCache(!useCache)}
                                             className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all border ${useCache
@@ -397,10 +432,10 @@ export const ProjectBuilder = ({
                                                 : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
                                                 }`}
                                         >
-                                            <Database className={`w-4 h-4 ${useCache ? 'animate-pulse' : ''}`} />
                                             <span className="text-[11px] font-bold uppercase tracking-wider">
                                                 {useCache ? 'Read from Cache' : 'Download Fresh Data'}
                                             </span>
+                                            <Database className={`w-4 h-4 ${useCache ? 'animate-pulse' : ''}`} />
                                         </button>
                                     </motion.div>
                                 </div>

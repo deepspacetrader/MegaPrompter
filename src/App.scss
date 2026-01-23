@@ -16,6 +16,20 @@
   background: rgba(255, 255, 255, 0.2);
 }
 
+/* Fix Lucide Icon Rendering */
+svg {
+  display: inline-block;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+/* Ensure icon containers work properly */
+.icon-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 /* Animations for Vite Logo (optional, but keep it for fun or remove) */
 .logo {
   height: 6em;

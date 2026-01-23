@@ -12,7 +12,6 @@ export const useCacheCheck = () => {
 
     useEffect(() => {
         const checkCache = async (retries = 3) => {
-            console.log('🔍 Checking cache status...')
             for (let attempt = 1; attempt <= retries; attempt++) {
                 try {
                     const response = await fetch('/api/cache-check', {
@@ -20,12 +19,9 @@ export const useCacheCheck = () => {
                     })
                     if (response.ok) {
                         const cacheInfo: CacheInfo = await response.json()
-                        console.log('📊 Cache info:', cacheInfo)
                         setUseCache(cacheInfo.exists && cacheInfo.valid)
-                        console.log('✅ useCache set to:', cacheInfo.exists && cacheInfo.valid)
                         return
                     } else {
-                        console.log(`❌ Cache check failed with status: ${response.status} (attempt ${attempt}/${retries})`)
                         if (attempt === retries) setUseCache(false)
                     }
                 } catch (error) {
@@ -33,7 +29,6 @@ export const useCacheCheck = () => {
                     if (attempt === retries) {
                         setUseCache(false)
                         // Don't throw error, just use fallback
-                        console.log('🔄 Using fallback mode due to cache check failure')
                     } else {
                         // Wait before retrying
                         await new Promise(resolve => setTimeout(resolve, 1000 * attempt))
