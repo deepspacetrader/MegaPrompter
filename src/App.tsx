@@ -11,6 +11,28 @@ import { SettingsModal } from './components/SettingsModal'
 
 function App() {
   const [selections, setSelections] = useState<Selection[]>([]);
+  
+  // Retry utility for API calls
+  const fetchWithRetry = async (url: string, options: RequestInit = {}, retries = 3) => {
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        const response = await fetch(url, {
+          ...options,
+          signal: AbortSignal.timeout(30000) // 30 second timeout
+        });
+        if (response.ok) return response;
+        
+        console.log(`API call failed with status ${response.status} (attempt ${attempt}/${retries})`);
+        if (attempt === retries) throw new Error(`Failed after ${retries} attempts`);
+      } catch (error) {
+        console.error(`API call error (attempt ${attempt}/${retries}):`, error);
+        if (attempt === retries) throw error;
+        // Wait before retrying with exponential backoff
+        await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt - 1)));
+      }
+    }
+    throw new Error('All retry attempts failed');
+  };
   interface NavItem {
     title: string;
     options: ProjectOption[];
@@ -190,7 +212,7 @@ function App() {
     try {
       console.log('Getting AI-powered tech stack recommendations...');
       
-      const response = await fetch('/api/auto-select-stack', {
+      const response = await fetchWithRetry('/api/auto-select-stack', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ selections })

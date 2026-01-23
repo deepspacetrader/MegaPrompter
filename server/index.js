@@ -16,7 +16,8 @@ app.use(cors({
     origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
     credentials: true
 }));
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 const PORT = 3001;
 const OLLAMA_URL = 'http://localhost:11434';
@@ -114,6 +115,10 @@ async function generateIdeasFromTrends(trends) {
                 },
                 required: ['ideas']
             }
+        }, {
+            timeout: 120000, // 2 minute timeout
+            maxContentLength: 50 * 1024 * 1024, // 50MB max response size
+            maxBodyLength: 50 * 1024 * 1024 // 50MB max request size
         });
 
         if (response.data.thinking) {
@@ -126,6 +131,11 @@ async function generateIdeasFromTrends(trends) {
         return Array.isArray(parsed.ideas) ? parsed.ideas : [];
     } catch (error) {
         console.error('Generating Ideas with Ai failed:', error.message);
+        if (error.code === 'ECONNRESET') {
+            console.error('Connection to Ollama was reset. The model might be overloaded or the request timed out.');
+        } else if (error.code === 'ECONNREFUSED') {
+            console.error('Could not connect to Ollama. Is Ollama running?');
+        }
         return [];
     }
 }
@@ -159,53 +169,12 @@ app.get('/api/trends', async (req, res) => {
         }
     }
 
-    // 2. Playwright Scrape (Custom)
-    const crawler = new PlaywrightCrawler({
-        maxRequestsPerCrawl: 10,
-        requestHandlerTimeoutSecs: 60,
-        async requestHandler({ page, request }) {
-            const url = request.url;
-            console.log(`Crawling: ${url}`);
+    // 2. Skip web scraping for stability - RSS feeds provide sufficient data
+    console.log('Using RSS feeds only for stability...');
 
-            if (url.includes('ycombinator.com')) {
-                try {
-                    await page.waitForSelector('.titleline', { timeout: 5000 });
-                    const titles = await page.$$eval('.titleline > a', (els) =>
-                        els.map(el => `[HackerNews] ${el.textContent}`).slice(0, 10)
-                    );
-                    headlines.push(...titles);
-                } catch (e) { console.error('HN Timeout'); }
-            }
-            else if (url.includes('github.com')) {
-                try {
-                    await page.waitForSelector('article.Box-row', { timeout: 8000 });
-                    const repos = await page.$$eval('article.Box-row h2 a', (els) =>
-                        els.map(el => `[GitHub Trending] ${el.textContent.trim().replace(/\s+/g, ' ')}`).slice(0, 8)
-                    );
-                    headlines.push(...repos);
-                } catch (e) { console.error('GitHub Timeout'); }
-            }
-            else if (url.includes('trends24.in')) {
-                try {
-                    // Twitter trends without API
-                    await page.waitForSelector('.trend-card', { timeout: 8000 });
-                    const xTrends = await page.$$eval('.trend-card:first-child .trend-name a', (els) =>
-                        els.map(el => `[X-Social-Trend] ${el.textContent}`).slice(0, 10)
-                    );
-                    headlines.push(...xTrends);
-                } catch (e) { console.error('X-Trends Timeout'); }
-            }
-        },
-    });
-
+    console.log(`Gathered ${headlines.length} signals. Transmuting into ideas...`);
+    
     try {
-        await crawler.run([
-            'https://news.ycombinator.com',
-            'https://github.com/trending',
-            'https://trends24.in/united-states/'
-        ]);
-
-        console.log(`Gathered ${headlines.length} signals. Transmuting into ideas...`);
         const ideas = await generateIdeasFromTrends(headlines);
 
         // 4. Save to Cache
@@ -223,8 +192,8 @@ app.get('/api/trends', async (req, res) => {
 
         res.json(ideas);
     } catch (error) {
-        console.error('Crawl failed:', error);
-        res.status(500).json({ error: 'System error during ideation' });
+        console.error('AI generation failed:', error);
+        res.status(500).json({ error: 'Failed to generate ideas', details: error.message });
     }
 });
 
@@ -370,6 +339,10 @@ app.post('/api/auto-select-stack', async (req, res) => {
                     required: ['id', 'category', 'label']
                 }
             }
+        }, {
+            timeout: 120000, // 2 minute timeout
+            maxContentLength: 50 * 1024 * 1024, // 50MB max response size
+            maxBodyLength: 50 * 1024 * 1024 // 50MB max request size
         });
 
         if (response.data.thinking) {
@@ -399,6 +372,11 @@ app.post('/api/auto-select-stack', async (req, res) => {
 
     } catch (error) {
         console.error('AI tech stack selection failed:', error.message);
+        if (error.code === 'ECONNRESET') {
+            console.error('Connection to Ollama was reset. The model might be overloaded or the request timed out.');
+        } else if (error.code === 'ECONNREFUSED') {
+            console.error('Could not connect to Ollama. Is Ollama running?');
+        }
         
         // Fallback recommendations
         const fallbackStack = [

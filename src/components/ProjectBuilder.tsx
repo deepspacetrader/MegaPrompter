@@ -38,11 +38,33 @@ export const ProjectBuilder = ({
     const [isSyncing, setIsSyncing] = useState(false);
     const { useCache, setUseCache } = useCacheCheck();
 
+    // Retry utility for API calls
+    const fetchWithRetry = async (url: string, options: RequestInit = {}, retries = 3) => {
+        for (let attempt = 1; attempt <= retries; attempt++) {
+            try {
+                const response = await fetch(url, {
+                    ...options,
+                    signal: AbortSignal.timeout(60000) // 60 second timeout for trends
+                });
+                if (response.ok) return response;
+                
+                console.log(`API call failed with status ${response.status} (attempt ${attempt}/${retries})`);
+                if (attempt === retries) throw new Error(`Failed after ${retries} attempts`);
+            } catch (error) {
+                console.error(`API call error (attempt ${attempt}/${retries}):`, error);
+                if (attempt === retries) throw error;
+                // Wait before retrying with exponential backoff
+                await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt - 1)));
+            }
+        }
+        throw new Error('All retry attempts failed');
+    };
+
     const fetchLiveTrends = async () => {
         setIsSyncing(true);
         try {
             const url = `/api/trends${!useCache ? '?force=true' : ''}`;
-            const response = await fetch(url);
+            const response = await fetchWithRetry(url);
             if (response.ok) {
                 const data = await response.json();
                 if (Array.isArray(data)) {
@@ -247,7 +269,7 @@ export const ProjectBuilder = ({
                                             )}
                                             {opt.features && (
                                                 <span className="text-[10px] text-muted-foreground uppercase tracking-tight mt-1">
-                                                    {opt.features.length} levels deep
+                                                    {opt.features.length} more
                                                 </span>
                                             )}
                                         </div>
