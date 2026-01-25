@@ -37,6 +37,7 @@ export const ProjectBuilder = ({
     const [ideationStack, setIdeationStack] = useState<{ title: string; options: ProjectOption[] }[]>([]);
     const [isSyncing, setIsSyncing] = useState(false);
     const [featuresPerIdea, setFeaturesPerIdea] = useState(4);
+    const [minIdeasToGenerate, setMinIdeasToGenerate] = useState(5);
     const { useCache, setUseCache } = useCacheCheck();
 
     // Retry utility for API calls
@@ -45,7 +46,7 @@ export const ProjectBuilder = ({
             try {
                 const response = await fetch(url, {
                     ...options,
-                    signal: AbortSignal.timeout(60000) // 60 second timeout for trends
+                    signal: AbortSignal.timeout(150000) // 150 second timeout to allow for server processing
                 });
                 if (response.ok) return response;
                 
@@ -66,12 +67,15 @@ export const ProjectBuilder = ({
         try {
             const cacheParam = !useCache ? '?force=true' : '';
             const featuresParam = featuresPerIdea !== 4 ? (cacheParam ? '&' : '?') + `featuresPerIdea=${featuresPerIdea}` : '';
-            const url = `/api/trends${cacheParam}${featuresParam}`;
+            const minIdeasParam = minIdeasToGenerate !== 5 ? (cacheParam || featuresParam ? '&' : '?') + `minIdeas=${minIdeasToGenerate}` : '';
+            const url = `/api/trends${cacheParam}${featuresParam}${minIdeasParam}`;
             const response = await fetchWithRetry(url);
             if (response.ok) {
                 const data = await response.json();
-                if (Array.isArray(data)) {
-                    setIdeationStack([{ title: 'Live Trending Tech', options: data }]);
+                // Handle both old format (just ideas array) and new format (ideas + trends)
+                const ideas = Array.isArray(data) ? data : data.ideas;
+                if (Array.isArray(ideas)) {
+                    setIdeationStack([{ title: 'Live Trending Tech', options: ideas }]);
                 } else {
                     console.error('Invalid trending data format:', data);
                 }
@@ -145,6 +149,7 @@ export const ProjectBuilder = ({
     const totalCustomDirectives = useMemo(() => {
         const filtered = selections.filter(s => {
             if (s.category === 'Custom') return true;
+            if (s.category === 'feature') return true; // Include AI-generated idea features
             
             // Check if category matches any PROJECT_IDEATION option or its sub-options
             return PROJECT_IDEATION.some(p => {
@@ -155,6 +160,13 @@ export const ProjectBuilder = ({
                 return false;
             });
         });
+        
+        // console.log('totalCustomDirectives calculation:', {
+        //     totalSelections: selections.length,
+        //     selections: selections,
+        //     filtered: filtered,
+        //     finalCount: filtered.length
+        // });
         
         return filtered.length;
     }, [selections]);
@@ -219,6 +231,16 @@ export const ProjectBuilder = ({
                                         animate={{ opacity: 1, y: 0 }}
                                         className="mb-4 p-4 rounded-2xl bg-primary/5 border border-primary/10"
                                     >
+                                        {/* Product/Service Name */}
+                                        <div className="mb-3">
+                                            <h4 className="text-lg font-bold text-primary mb-2">
+                                                {parentOption.label}
+                                            </h4>
+                                        </div>
+                                        
+                                       
+                                        
+                                        {/* Description */}
                                         <p className="text-sm text-white/80 leading-relaxed">
                                             {parentOption.description}
                                         </p>
@@ -409,25 +431,41 @@ export const ProjectBuilder = ({
                                     <motion.div
                                         initial={{ opacity: 0 }}
                                         animate={{ opacity: 1 }}
-                                        className="self-end flex gap-2"
+                                        className="flex flex-col gap-2"
                                     >
-                                        <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/10 bg-white/5">
-                                            <label className="text-[10px] font-bold tracking-wider text-white/60">
-                                                Features per idea
-                                            </label>
-                                            <input
-                                                type="number"
-                                                min="1"
-                                                max="20"
-                                                value={featuresPerIdea}
-                                                onChange={(e) => setFeaturesPerIdea(Math.max(1, Math.min(20, parseInt(e.target.value) || 4)))}
-                                                className="w-12 bg-white/10 border border-white/20 rounded px-2 py-1 text-xs text-white/80 text-center focus:outline-none focus:border-primary/50 disabled:opacity-50 disabled:cursor-not-allowed"
-                                                disabled={isSyncing || useCache}
-                                            />
+                                        <div className="flex gap-2">
+                                            <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/10 bg-white/5 flex-1">
+                                                <label className="text-[10px] font-bold tracking-wider text-white/60">
+                                                    Features per idea
+                                                </label>
+                                                <input
+                                                    type="number"
+                                                    min="1"
+                                                    max="20"
+                                                    value={featuresPerIdea}
+                                                    onChange={(e) => setFeaturesPerIdea(Math.max(1, Math.min(20, parseInt(e.target.value) || 4)))}
+                                                    className="w-12 bg-white/10 border border-white/20 rounded px-2 py-1 text-xs text-white/80 text-center focus:outline-none focus:border-primary/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    disabled={isSyncing || useCache}
+                                                />
+                                            </div>
+                                            <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/10 bg-white/5 flex-1">
+                                                <label className="text-[10px] font-bold tracking-wider text-white/60">
+                                                    Min ideas
+                                                </label>
+                                                <input
+                                                    type="number"
+                                                    min="1"
+                                                    max="20"
+                                                    value={minIdeasToGenerate}
+                                                    onChange={(e) => setMinIdeasToGenerate(Math.max(1, Math.min(20, parseInt(e.target.value) || 5)))}
+                                                    className="w-12 bg-white/10 border border-white/20 rounded px-2 py-1 text-xs text-white/80 text-center focus:outline-none focus:border-primary/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    disabled={isSyncing || useCache}
+                                                />
+                                            </div>
                                         </div>
                                         <button
                                             onClick={() => setUseCache(!useCache)}
-                                            className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all border ${useCache
+                                            className={`flex items-center justify-center gap-2 px-4 py-2 rounded-xl transition-all border ${useCache
                                                 ? 'bg-white/5 border-white/10 text-white/40'
                                                 : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
                                                 }`}
@@ -599,12 +637,13 @@ export const ProjectBuilder = ({
                                 whileHover={{ scale: isAutoSelecting ? 1 : 1.02 }}
                                 whileTap={{ scale: isAutoSelecting ? 1 : 0.98 }}
                                 onClick={() => {
-                                    console.log('Choose for me button clicked!');
+                                    console.log('=== Choose For Me Debug ===');
                                     console.log('totalCustomDirectives:', totalCustomDirectives);
-                                    console.log('isAutoSelecting:', isAutoSelecting);
+                                    console.log('selections:', selections);
+                                    console.log('selections categories:', selections.map(s => s.category));
+                                    console.log('==========================');
                                     
                                     if (totalCustomDirectives === 0) {
-                                        console.log('No directives found, guiding user to step 1');
                                         // Guide user to step 1 first - scroll to the main buttons and animate them
                                         const step1Container = document.querySelector('.step-1')?.closest('.glass-card');
                                         step1Container?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -622,7 +661,7 @@ export const ProjectBuilder = ({
                                             });
                                         }, 500);
                                     } else {
-                                        console.log('Directives found, calling onAutoSelect');
+                                        console.log('Calling onAutoSelect...');
                                         onAutoSelect();
                                     }
                                 }}

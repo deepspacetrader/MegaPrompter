@@ -1,0 +1,38 @@
+{
+  "id": "d2r221sa",
+  "prompt": "# Vector Safe Security Suite\n\n## 1. Project Essence & Vision\nThe Vector Safe Security Suite is designed to provide enterprise-grade security features through a unified platform. Its primary goals are:\n- Implement robust authentication and authorization mechanisms\n- Ensure data protection through encryption and controlled sharing\n- Provide automated security incident management\n- Maintain comprehensive security audit trails\n- Deliver a secure, user-friendly interface for all security features\n\nThe system will serve as a foundational security layer for applications requiring compliance with strict security standards.\n\n## 2. Ralph-Friendly PRD.md\n```markdown\n# Vector Safe Security Suite - Requirements\n\n## 1.0 Authentication & Authorization\n### 1.1 Multi-Factor Authentication (MFA)\n- [ ] Implement TOTP-based MFA using authenticator app\n- [ ] Support SMS-based backup codes\n- [ ] Implement adaptive challenge factors based on risk assessment\n- [ ] Create MFA enrollment and management workflow\n- [ ] Design emergency access procedures\n\n### 1.2 Role-Based Access Control (RBAC)\n- [ ] Define minimum RBAC roles (Admin, Auditor, User)\n- [ ] Implement role hierarchy and inheritance\n- [ ] Create role-based permission system\n- [ ] Design role assignment and modification workflow\n- [ ] Implement RBAC audit trails\n\n## 2.0 Data Security\n### 2.1 End-to-End Encryption (E2EE)\n- [ ] Implement hybrid encryption architecture\n- [ ] Manage asymmetric and symmetric key storage\n- [ ] Create secure key exchange mechanism\n- [ ] Implement client-side decryption workflow\n\n### 2.2 Secure Data Sharing\n- [ ] Design access-controlled sharing mechanism\n- [ ] Implement temporary access tokens with expiration\n- [ ] Create sharing permission granularities (view/edit/delete)\n- [ ] Maintain sharing audit logs\n\n## 3.0 Security Operations\n### 3.1 Automated Incident Response\n- [ ] Design incident detection triggers\n- [ ] Implement tiered response mechanisms\n- [ ] Create incident escalation workflow\n- [ ] Develop incident reporting dashboard\n\n### 3.2 Comprehensive Audit Logs\n- [ ] Capture all security-relevant events\n- [ ] Ensure log immutability and integrity\n- ] Implement log aggregation and search\n- [ ] Design log retention policy\n\n## 4.0 User Interface\n### 4.1 Security Dashboard\n- [ ] Create unified security management interface\n- [ ] Design role-based dashboard views\n- [ ] Implement security status indicators\n- [ ] Develop audit log viewer\n\n## 5.0 System Integration\n### 5.1 Security Gateway\n- [ ] Design API security gateway\n- [ ] Implement request validation and sanitization\n- [ ] Create security header enforcement\n- [ ] Develop threat detection middleware\n\n## 6.0 Technical Requirements\n### 6.1 Core Dependencies\n- Next.js v14.2.4\n- TypeScript v5.3.5\n- Supabase v2.35.0 (for auth)\n- WebAuthn libraries\n- @openpgp/js (for PGP operations)\n```\n\n## 3. Institutional Memory (agents.md)\n```markdown\n# Vector Safe Security Suite - Agents.md\n\n## 1. Core Principles\n```markdown\n### Security First\n- All development must prioritize security\n- Security features must be verified before functionality\n- Regular security audits required\n\n### Incremental Improvement\n- Start with core functionality\n- Add advanced features incrementally\n- Maintain backward compatibility\n\n### Documentation Driven\n- All changes must be documented\n- Maintain institutional knowledge\n- Regularly update security patterns\n```\n\n## 2. Development Guidelines\n```markdown\n### 2.1 Security Implementation\n- Always use WebAuthn for authenticators\n- Implement strict CSP policies\n- Use zero-self-trust architecture\n- Enforce strict input validation\n- Maintain separation between UI and backend\n```\n\n## 4. Technical Stack\n```json\n{\n  \"frontend\": {\n    \"framework\": \"Next.js v14.2.4\",\n    \"language\": \"TypeScript v5.3.5\",\n    \"components\": [\"shadcn/ui\", \"react-icons\"],\n    \"security\": [\"helmet\", \"csp-nonce\"]\n  },\n  \"backend\": {\n    \"framework\": \"Node.js v20.12.0\",\n    \"security\": [\"helmet\", \"express-rate-limit\"],\n    \"storage\": \"Supabase Postgres\"\n  },\n  \"encryption\": {\n    \"asymmetric\": \"crypto-js\",\n    \"symmetric\": \"openpgp.js\",\n    \"hashing\": \"bcryptjs\"\n  },\n  \"compliance\": {\n    \"standards\": [\"SOC 2\", \"HIPAA\", \"GDPR\"],\n    \"audits\": [\"OWASP ZAP\", \"Burp Suite\"]\n  }\n}\n```\n\n## 5. Core Architecture\n```mermaid\ngraph TD\n    subgraph Security Gateway\n        A[API Gateway] \n        B[Request Validator]\n        C[Security Header Enforcer]\n    end\n\n    subgraph Data Plane\n        D[Auth Service]\n        E[Data Gateway]\n        F[Security Service]\n    end\n\n    subgraph UI Plane\n        G[Security Dashboard]\n        H[Admin Portal]\n        I[User Console]\n    end\n\n    A --> B\n    B --> C\n    C --> D\n    D --> E\n    E --> F\n    F --> G\n    G --> H\n    H --> I\n```\n\n## 6. AI Implementation Strategy\n```markdown\n### 6.1 Initialization\n1. Initialize development environment\n2. Set up test infrastructure\n3. Deploy initial security baseline\n\n### 6.2 Core Development\n1. Implement MFA system\n2. Develop RBAC framework\n3. Build E2EE architecture\n4. Create secure data sharing patterns\n\n### 6.3 Security Operations\n1. Develop incident response system\n2. Build audit logging infrastructure\n3. Implement security monitoring\n\n### 6.4 User Interface\n1. Create security dashboard\n2. Develop admin portal\n3. Build user console\n\n### 6.5 Testing & Refinement\n1. Conduct security audits\n2. Perform penetration testing\n3. Implement threat modeling\n```\n\n## 7. Safety & Security\n```markdown\n### 7.1 Security Constraints\n- All data at rest must be encrypted\n- All network traffic must be encrypted\n- Implement strict access controls\n- Regular vulnerability scanning\n- Security incident reporting mandatory\n\n### 7.2 Edge Cases\n- Handle expired tokens securely\n- Manage cryptographic key rotation\n- Address zero-day vulnerabilities\n- Prepare for DDoS attacks\n- Maintain availability during security incidents\n```",
+  "selections": [
+    {
+      "id": "multi_factor_auth",
+      "category": "Vector Safe",
+      "label": "Multi-Factor Authentication"
+    },
+    {
+      "id": "end_to_end_encryption",
+      "category": "Vector Safe",
+      "label": "End-to-End Encryption"
+    },
+    {
+      "id": "secure_data_sharing",
+      "category": "Vector Safe",
+      "label": "Secure Data Sharing"
+    },
+    {
+      "id": "access_control",
+      "category": "Vector Safe",
+      "label": "Role-Based Access Control"
+    },
+    {
+      "id": "incident_response",
+      "category": "Vector Safe",
+      "label": "Automated Incident Response"
+    },
+    {
+      "id": "audit_logs",
+      "category": "Vector Safe",
+      "label": "Comprehensive Audit Logs"
+    }
+  ],
+  "selectedModel": "deepseek-r1:8b",
+  "timestamp": "2026-01-23T23:50:44.702Z"
+}

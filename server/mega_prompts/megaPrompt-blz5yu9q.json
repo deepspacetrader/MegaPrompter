@@ -1,0 +1,108 @@
+{
+  "id": "blz5yu9q",
+  "prompt": "# Mega Prompt: Quant Flow Compliance System\n\n```markdown\n## 1. Project Essence & Vision\nThe **Quant Flow Compliance System** is an autonomous agent-driven platform designed to automate and enforce compliance across multiple domains, including data governance, security, vendor management, and regulatory adherence. Its vision is to create a self-documenting, self-auditing, and self-correcting compliance ecosystem that minimizes human intervention while maximizing auditability and security posture.\n\n## 2. Ralph-Friendly PRD.md\n### Core User Stories\n```markdown\n### Automated Audit Trail\n- US001: Capture immutable audit logs for all system interactions (users, data changes, policy enforcement)\n- US002: Generate periodic audit reports with visualizations and anomalies detection\n\n### Transparency Reporting\n- US003: Create dashboard for compliance officers to view audit statuses and compliance scores\n- US004: Implement export functionality for audit trails in multiple formats (PDF, CSV, JSON)\n\n### Incident Tracking System\n- US005: Log, categorize, and prioritize security incidents\n- US006: Automate incident response workflows based on severity\n\n### Regular Access Reviews\n- US007: Schedule automated access reviews for all users\n- US008: Generate access recommendations and compliance reports\n\n### Compliance Alerts\n- US009: Monitor system for compliance violations in real-time\n- US010: Send automated alerts to compliance officers via multiple channels\n\n### Data Governance Framework\n- US011: Implement data classification system based on sensitivity\n- US012: Track data lineage across systems\n\n### Policy Management System\n- US013: Create version-controlled policy repository\n- US014: Deploy policy changes automatically across systems\n\n### Third-Party Verification\n- US015: Maintain registry of third-party vendors and their compliance status\n- US016: Generate third-party risk assessments\n\n### Compliance Training Platform\n- US017: Create onboarding and refresher training modules\n- US018: Track training completion and certifications\n\n### Security Posture Assessment\n- US019: Conduct automated vulnerability scanning of systems\n- US020: Generate security posture reports\n\n### Breach Response Plan\n- US021: Automate incident response for data breaches\n- US022: Document breach response activities\n\n### Access Request Workflow\n- US023: Implement automated access request workflow\n- US024: Integrate with identity management systems\n\n### Compliance Checklists\n- US025: Create checklists for common compliance requirements\n- US026: Track checklist completion\n\n### Automated Compliance Reporting\n- US027: Generate monthly compliance reports\n- US028: Export reports in required regulatory formats\n\n### Risk Heatmap Visualization\n- US029: Visualize compliance risks across departments\n- US030: Prioritize risks based on potential impact\n\n### Vendor Risk Assessment\n- US031: Assess third-party vendors against security/compliance criteria\n- US032: Track vendor risk scores over time\n\n### Security Standards Library\n- US033: Maintain catalog of security standards and frameworks\n- US034: Map system configurations against standards\n\n### Document Control System\n- US035: Track versions of compliance-related documents\n- US036: Maintain approval history for document changes\n\n### Risk Assessment Tool\n- US037: Conduct qualitative and quantitative risk assessments\n- US038: Document assessment methodologies\n\n### Compliance Dashboard\n- US039: Create executive dashboard for compliance metrics\n- US040: Implement drill-down capabilities for detailed views\n```\n\n## 3. Institutional Memory (agents.md)\n```markdown\n### Core Rules\n1. **Immutable Audit Trail**: All system interactions must be logged with immutable records\n2. **Compliance by Design**: All new features must include compliance validation\n3. **Progressive Disclosure**: Complexity of compliance information should match user role\n4. **Version Control**: All compliance artifacts must be versioned and auditable\n\n### Patterns\n1. **Template Pattern**: Use standardized templates for all compliance documentation\n2. **Observer Pattern**: Implement multiple alert channels for critical events\n3. **State Pattern**: Manage compliance workflows through defined states\n\n### Learning Schema\n```json\n{\n  \"compliance_frameworks\": [],\n  \"regulatory_updates\": [],\n  \"industry_standards\": [],\n  \"best_practices\": []\n}\n```\n\n## 4. Technical Stack\n```markdown\n### Frontend\n- React/Next.js with TypeScript\n- Tailwind CSS for styling\n- GraphQL for data fetching\n\n### Backend\n- Node.js with Express\n- Prisma for ORM\n- PostgreSQL database\n\n### Compliance Engine\n- Python-based rule engine\n- Docker for containerization\n- AWS Lambda for serverless execution\n\n### Security\n- OWASP ZAP for security scanning\n- Snyk for dependency security\n- Regular penetration testing\n```\n\n## 5. Core Architecture\n### Component Diagram\n```mermaid\ngraph TD\n  subgraph User Interface\n    A[Dashboard] --> B(Access Control)\n    A --> C(Reporting)\n  end\n  subgraph Compliance Engine\n    B --> D(Rule Engine)\n    D --> E(Data Analysis)\n    E --> F(Risk Assessment)\n  end\n  subgraph Data Sources\n    F --> G(Audit Logs)\n    F --> H(System Inventory)\n    F --> I(User Access)\n  end\n  subgraph External Systems\n    J[Identity Provider] --> B\n    K[Document Storage] --> F\n  end\n```\n\n## 6. AI Implementation Strategy\n### Ralph Loop Execution Plan\n1. **Phase 1: Foundation**\n   - Implement core compliance framework\n   - Establish baseline metrics\n   - Set up audit trail system\n\n2. **Phase 2: Automation**\n   - Deploy automated access review system\n   - Implement compliance alerts\n   - Create vendor risk assessment system\n\n3. **Phase 3: Intelligence**\n   - Develop predictive risk models\n   - Implement anomaly detection\n   - Create compliance recommendations engine\n\n## 7. Safety & Security\n### Constraints\n1. **Data Privacy**: All personal data must be anonymized or pseudonymized\n2. **Auditability**: All system changes must be logged with version control\n3. **Availability**: System must maintain 99.9% uptime\n4. **Security**: Implement zero-trust architecture principles\n\n### Edge Cases\n1. **Conflict Compliance Requirements**: Document resolution process\n2. **Regulatory Changes**: Fallback procedures during transition\n3. **Data Breach**: Automated containment and notification\n4. **System Failure**: Fallback to manual compliance processes\n```\n\n<specification>\n{\n  \"projectName\": \"Mega Prompt Project\",\n  \"timestamp\": \"2026-01-23T23:40:31.819Z\",\n  \"model\": \"deepseek-r1:8b\",\n  \"requirements\": [\n    {\n      \"type\": \"Quant Flow\",\n      \"value\": \"Automated Audit Trail\"\n    },\n    {\n      \"type\": \"Quant Flow\",\n      \"value\": \"Transparency Reporting\"\n    },\n    {\n      \"type\": \"Quant Flow\",\n      \"value\": \"Incident Tracking System\"\n    },\n    {\n      \"type\": \"Quant Flow\",\n      \"value\": \"Regular Access Reviews\"\n    },\n    {\n      \"type\": \"Quant Flow\",\n      \"value\": \"Compliance Alerts\"\n    },\n    {\n      \"type\": \"Quant Flow\",\n      \"value\": \"Data Governance Framework\"\n    },\n    {\n      \"type\": \"Quant Flow\",\n      \"value\": \"Policy Management System\"\n    },\n    {\n      \"type\": \"Quant Flow\",\n      \"value\": \"Third-Party Verification\"\n    },\n    {\n      \"type\": \"Quant Flow\",\n      \"value\": \"Compliance Training Platform\"\n    },\n    {\n      \"type\": \"Quant Flow\",\n      \"value\": \"Security Posture Assessment\"\n    },\n    {\n      \"type\": \"Quant Flow\",\n      \"value\": \"Breach Response Plan\"\n    },\n    {\n      \"type\": \"Quant Flow\",\n      \"value\": \"Access Request Workflow\"\n    },\n    {\n      \"type\": \"Quant Flow\",\n      \"value\": \"Compliance Checklists\"\n    },\n    {\n      \"type\": \"Quant Flow\",\n      \"value\": \"Automated Compliance Reporting\"\n    },\n    {\n      \"type\": \"Quant Flow\",\n      \"value\": \"Risk Heatmap Visualization\"\n    },\n    {\n      \"type\": \"Quant Flow\",\n      \"value\": \"Vendor Risk Assessment\"\n    },\n    {\n      \"type\": \"Quant Flow\",\n      \"value\": \"Security Standards Library\"\n    },\n    {\n      \"type\": \"Quant Flow\",\n      \"value\": \"Document Control System\"\n    },\n    {\n      \"type\": \"Quant Flow\",\n      \"value\": \"Risk Assessment Tool\"\n    },\n    {\n      \"type\": \"Quant Flow\",\n      \"value\": \"Compliance Dashboard\"\n    }\n  ],\n  \"config\": {\n    \"theme\": \"modern\",\n    \"responsive\": true,\n    \"ai_powered\": true\n  }\n}\n</specification>\n```",
+  "selections": [
+    {
+      "id": "audit_trail",
+      "category": "Quant Flow",
+      "label": "Automated Audit Trail"
+    },
+    {
+      "id": "transparency_reporting",
+      "category": "Quant Flow",
+      "label": "Transparency Reporting"
+    },
+    {
+      "id": "incident_tracking",
+      "category": "Quant Flow",
+      "label": "Incident Tracking System"
+    },
+    {
+      "id": "access_review",
+      "category": "Quant Flow",
+      "label": "Regular Access Reviews"
+    },
+    {
+      "id": "compliance_alerts",
+      "category": "Quant Flow",
+      "label": "Compliance Alerts"
+    },
+    {
+      "id": "data_governance",
+      "category": "Quant Flow",
+      "label": "Data Governance Framework"
+    },
+    {
+      "id": "policy_management",
+      "category": "Quant Flow",
+      "label": "Policy Management System"
+    },
+    {
+      "id": "third_party_verification",
+      "category": "Quant Flow",
+      "label": "Third-Party Verification"
+    },
+    {
+      "id": "training_platform",
+      "category": "Quant Flow",
+      "label": "Compliance Training Platform"
+    },
+    {
+      "id": "security_posture_assessment",
+      "category": "Quant Flow",
+      "label": "Security Posture Assessment"
+    },
+    {
+      "id": "data_breach_response",
+      "category": "Quant Flow",
+      "label": "Breach Response Plan"
+    },
+    {
+      "id": "access_request_workflow",
+      "category": "Quant Flow",
+      "label": "Access Request Workflow"
+    },
+    {
+      "id": "compliance_checklists",
+      "category": "Quant Flow",
+      "label": "Compliance Checklists"
+    },
+    {
+      "id": "compliance_reporting",
+      "category": "Quant Flow",
+      "label": "Automated Compliance Reporting"
+    },
+    {
+      "id": "risk_heatmap",
+      "category": "Quant Flow",
+      "label": "Risk Heatmap Visualization"
+    },
+    {
+      "id": "vendor_risk_assessment",
+      "category": "Quant Flow",
+      "label": "Vendor Risk Assessment"
+    },
+    {
+      "id": "security_standards_library",
+      "category": "Quant Flow",
+      "label": "Security Standards Library"
+    },
+    {
+      "id": "document_control",
+      "category": "Quant Flow",
+      "label": "Document Control System"
+    },
+    {
+      "id": "risk_assessment_tool",
+      "category": "Quant Flow",
+      "label": "Risk Assessment Tool"
+    },
+    {
+      "id": "compliance_dashboard",
+      "category": "Quant Flow",
+      "label": "Compliance Dashboard"
+    }
+  ],
+  "selectedModel": "deepseek-r1:8b",
+  "timestamp": "2026-01-23T23:41:19.022Z"
+}

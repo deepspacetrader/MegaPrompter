@@ -414,7 +414,15 @@ export const TRENDING_IDEATION: ProjectOption[] = [
     }
 ];
 
-export const DEFAULT_MODELS = ['deepseek-r1:8b'];
+export const DEFAULT_MODELS = [
+  'llama3.2:latest',
+  'deepseek-r1:8b', 
+  'qwen2.5-coder:14b',
+  'mistral-nemo:latest',
+  'codellama:latest',
+  'glm-4.7-flash:q4_K_M',
+  'qwen3:8b'
+];
 
 export const RECOMMENDATIONS_MAP: Record<string, Selection> = {
     'react': { id: 'node_cli', label: 'Node.js', category: 'Backend Suggestion' },

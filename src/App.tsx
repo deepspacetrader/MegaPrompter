@@ -2,6 +2,9 @@ import { useState, useMemo, useEffect } from 'react'
 import type { Selection, ProjectOption } from './types'
 import { PROJECT_TYPES, DEFAULT_MODELS, RECOMMENDATIONS_MAP, ARCHITECT_SYSTEM_PROMPT } from './constants'
 import { Header } from './components/Header'
+import { Trends } from './components/Trends'
+import { TrendsModal } from './components/TrendsModal'
+import { HeadlineAnalysisModal } from './components/HeadlineAnalysisModal'
 import { ProjectBuilder } from './components/ProjectBuilder'
 import { ProjectRequirements } from './components/ProjectRequirements'
 import { Preview } from './components/Preview'
@@ -52,6 +55,16 @@ function App() {
   const [isRestartConfirmOpen, setIsRestartConfirmOpen] = useState(false);
   const [ollamaUrl, setOllamaUrl] = useState('http://localhost:11434');
   const [systemPrompt, setSystemPrompt] = useState(ARCHITECT_SYSTEM_PROMPT);
+  const [trends, setTrends] = useState<any>(null);
+  const [isLoadingTrends, setIsLoadingTrends] = useState(false);
+  const [showDetailedAnalysis, setShowDetailedAnalysis] = useState(false);
+  const [selectedHeadline, setSelectedHeadline] = useState<{
+    original: string
+    source: string
+    title: string
+    analysis: any
+    timestamp: string
+  } | null>(null);
 
   const fetchModels = async () => {
     try {
@@ -61,6 +74,7 @@ function App() {
         const models = data.models.map((m: any) => m.name);
         if (models.length > 0) {
           setOllamaModels(models);
+          // Only change selectedModel if current selection is not available
           if (!models.includes(selectedModel)) {
             setSelectedModel(models[0]);
           }
@@ -73,6 +87,7 @@ function App() {
 
   useEffect(() => {
     fetchModels();
+    fetchTrends();
   }, [ollamaUrl]);
 
   // Parse URL for prompt ID on mount
@@ -83,6 +98,31 @@ function App() {
       loadPromptFromStorage(promptId);
     }
   }, []);
+
+  const fetchTrends = async () => {
+    setIsLoadingTrends(true);
+    try {
+      const response = await fetchWithRetry('/api/trends');
+      if (response.ok) {
+        const data = await response.json();
+        // Handle both old format (just ideas) and new format (ideas + trends)
+        if (data.trends) {
+          setTrends(data.trends);
+        } else {
+          // Old format - create basic trends info
+          setTrends({
+            totalSignals: 0,
+            sources: ['TechCrunch', 'The Verge', 'Wired', 'Hacker News', 'Product Hunt', 'GitHub Trending'],
+            sampleHeadlines: []
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch trends:', error);
+    } finally {
+      setIsLoadingTrends(false);
+    }
+  };
 
   const loadPromptFromStorage = async (promptId: string) => {
     try {
@@ -323,7 +363,7 @@ function App() {
       timestamp: new Date().toISOString(),
       model: selectedModel,
       requirements: selections.map(s => ({ 
-        type: s.category, 
+        type: s.category === 'feature' ? 'feature' : s.category, 
         value: s.label,
         description: s.description 
       })),
@@ -510,6 +550,8 @@ ${extraGuidance ? `### 6. EXTRA GUIDANCE & SPECIFIC REQUIREMENTS\n- ${extraGuida
           onRestart={() => setIsRestartConfirmOpen(true)}
         />
 
+        <Trends trends={trends} isLoading={isLoadingTrends} onOpenDetailedAnalysis={() => setShowDetailedAnalysis(true)} onAnalyzeHeadline={setSelectedHeadline} />
+
         <main className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           <ProjectBuilder
             navStack={navStack}
@@ -592,6 +634,20 @@ ${extraGuidance ? `### 6. EXTRA GUIDANCE & SPECIFIC REQUIREMENTS\n- ${extraGuida
           </div>
         </div>
       )}
+
+      {/* Trends Detailed Analysis Modal - Rendered at top level for highest z-index */}
+      {trends && showDetailedAnalysis && (
+        <TrendsModal 
+          trends={trends} 
+          onClose={() => setShowDetailedAnalysis(false)}
+        />
+      )}
+
+      {/* Headline Analysis Modal - Rendered at top level for highest z-index */}
+      <HeadlineAnalysisModal 
+        selectedHeadline={selectedHeadline}
+        onClose={() => setSelectedHeadline(null)}
+      />
     </div>
   )
 }

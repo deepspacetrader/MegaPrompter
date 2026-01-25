@@ -158,9 +158,9 @@ async function generateIdeasFromTrends(trends, featuresPerIdea = 4) {
     ### MISSION ###
     1. Study the RAW SIGNALS.
     2. Synthesize them into specific, high-concept software project ideas that are actionable, innovative, and market-ready. They should solve a problem or fill a gap in the market by creating value for the potential users by creatively solving their problems.
-    3. Ideas should be centered around some sort of software application or digital service. Should not be a physical product. Do not rely upon non existing physical hardware technology such as quantum scanners or force fields.
+    3. Ideas should software focused either as web or desktop applications or digital services. Should not be a physical product. Do not rely upon non existing technology such as force fields. Nothing sci-fi.
     4. CRITICAL: NEVER use these forbidden words: "Product Name", "AI App", "Niche Implementation", "Creative Product", "Strategic Feature", "unique-slug", "s1", "s2".
-    5. Provide unique, bold, original industry-specific names (e.g., "Vector Safe", "Quant Flow", "Bio Nexus").
+    5. Provide unique, bold, original industry-specific names (e.g., "Vector Power", "Quant Flow", "Bio Nexus") and try to make them self explanatory.
     
     ### OUTPUT FORMAT (JSON ONLY) ###
     {
@@ -253,7 +253,14 @@ app.get('/api/trends', async (req, res) => {
             const now = Date.now();
             if (now - cacheData.timestamp < CACHE_TTL && req.query.force !== 'true') {
                 console.log('Serving ideas from cache...');
-                return res.json(cacheData.ideas);
+                return res.json({
+                    ideas: cacheData.ideas,
+                    trends: cacheData.trends || {
+                        totalSignals: 0,
+                        sources: [],
+                        sampleHeadlines: []
+                    }
+                });
             }
         }
     } catch (e) {
@@ -295,7 +302,15 @@ app.get('/api/trends', async (req, res) => {
             try {
                 fs.writeFileSync(CACHE_FILE, JSON.stringify({
                     timestamp: Date.now(),
-                    ideas: ideas
+                    ideas: ideas,
+                    trends: {
+                        totalSignals: headlines.length,
+                        sources: [
+                            ...FEEDS.map(f => f.name),
+                            ...SCRAPING_TARGETS.map(t => t.name)
+                        ],
+                        sampleHeadlines: headlines.slice(0, 10)
+                    }
                 }, null, 2));
                 console.log('Results cached successfully.');
             } catch (e) {
@@ -303,7 +318,17 @@ app.get('/api/trends', async (req, res) => {
             }
         }
 
-        res.json(ideas);
+        res.json({
+            ideas: ideas,
+            trends: {
+                totalSignals: headlines.length,
+                sources: [
+                    ...FEEDS.map(f => f.name),
+                    ...SCRAPING_TARGETS.map(t => t.name)
+                ],
+                sampleHeadlines: headlines.slice(0, 10)
+            }
+        });
     } catch (error) {
         console.error('AI generation failed:', error);
         res.status(500).json({ error: 'Failed to generate ideas', details: error.message });
