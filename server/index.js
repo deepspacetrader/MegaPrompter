@@ -9,6 +9,10 @@ import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const rootDir = path.join(__dirname, '..');
+
+// Ensure Crawlee storage is outside the server directory to prevent nodemon restart loop
+process.env.CRAWLEE_STORAGE_DIR = path.join(rootDir, 'storage');
 
 const app = express();
 const parser = new RSSParser();
@@ -23,8 +27,8 @@ const PORT = 3001;
 const OLLAMA_URL = 'http://localhost:11434';
 const DEFAULT_MODEL = 'deepseek-r1:8b';
 // const DEFAULT_MODEL = 'qwen3:8b';
-const CACHE_FILE = path.join(__dirname, 'idea_cache.json');
-const MEGA_PROMPTS_DIR = path.join(__dirname, 'mega_prompts');
+const CACHE_FILE = path.join(__dirname, '..', 'idea_cache.json');
+const MEGA_PROMPTS_DIR = path.join(__dirname, '..', 'storage', 'mega_prompts');
 const CACHE_TTL = 1000 * 60 * 60 * 6; // 6 hours
 
 // Web scraping targets for additional trend data
@@ -51,7 +55,7 @@ function ensureMegaPromptsDir() {
 // Web scraping function with built-in caching and protection
 async function scrapeTrendingTopics() {
     const headlines = [];
-    
+
     // Create session pool for human-like behavior
     const sessionPool = new SessionPool({
         maxPoolSize: 5,
@@ -110,26 +114,26 @@ async function scrapeTrendingTopics() {
 
             try {
                 log.info(`Scraping ${target.name}...`);
-                
+
                 // Wait for content to load
                 await page.waitForLoadState('domcontentloaded');
-                
+
                 // Extract headlines
                 const elements = await page.locator(target.selector).all();
                 const texts = await Promise.all(
                     elements.slice(0, 5).map(el => el.textContent())
                 );
-                
+
                 const headlinesFromSite = texts
                     .filter(text => text && text.trim().length > 0)
                     .map(text => `[${target.name}] ${text.trim()}`);
-                
+
                 headlines.push(...headlinesFromSite);
                 log.info(`Found ${headlinesFromSite.length} headlines from ${target.name}`);
-                
+
                 // Add delay between requests to be respectful
                 await page.waitForTimeout(Math.random() * 2000 + 1000); // 1-3 second random delay
-                
+
             } catch (error) {
                 log.error(`Error scraping ${target.name}: ${error.message}`);
             }
@@ -138,14 +142,16 @@ async function scrapeTrendingTopics() {
 
     // Add targets to crawler
     await crawler.addRequests(SCRAPING_TARGETS.map(t => t.url));
-    
+
     // Run crawler
+    console.log('Crawler starting...');
     await crawler.run();
-    
+    console.log('Crawler finished successfully.');
+
     return headlines;
 }
 
-async function generateIdeasFromTrends(trends, featuresPerIdea = 4) {
+async function generateIdeasFromTrends(trends, featuresPerIdea = 5, model = DEFAULT_MODEL) {
     if (trends.length === 0) return [];
 
     const prompt = `
@@ -169,6 +175,7 @@ async function generateIdeasFromTrends(trends, featuresPerIdea = 4) {
           "id": "meaningful-slug-1", 
           "label": "BOLD PRODUCT NAME",
           "description": "Brief one-sentence description",
+          "rationale": "Explain which RAW SIGNALS influenced this idea and why (e.g., 'Inspired by the rise of AI agents and the need for better vector databases...')",
           "features": [
             {"id": "feature-slug-1", "label": "SPECIFIC HIGH-LEVEL FEATURE"},
             {"id": "feature-slug-2", "label": "SPECIFIC HIGH-LEVEL FEATURE"}
@@ -183,9 +190,9 @@ async function generateIdeasFromTrends(trends, featuresPerIdea = 4) {
     `;
 
     try {
-        console.log(`Generating ideas with Ai now in progress using: ${DEFAULT_MODEL}...`);
+        console.log(`Generating ideas with Ai now in progress using: ${model}...`);
         const response = await axios.post(`${OLLAMA_URL}/api/generate`, {
-            model: DEFAULT_MODEL,
+            model: model,
             prompt: prompt,
             stream: false,
             think: true,
@@ -200,6 +207,7 @@ async function generateIdeasFromTrends(trends, featuresPerIdea = 4) {
                                 id: { type: 'string' },
                                 label: { type: 'string' },
                                 description: { type: 'string' },
+                                rationale: { type: 'string' },
                                 features: {
                                     type: 'array',
                                     items: {
@@ -211,7 +219,7 @@ async function generateIdeasFromTrends(trends, featuresPerIdea = 4) {
                                     }
                                 }
                             },
-                            required: ['id', 'label', 'description', 'features']
+                            required: ['id', 'label', 'description', 'rationale', 'features']
                         }
                     }
                 },
@@ -229,7 +237,17 @@ async function generateIdeasFromTrends(trends, featuresPerIdea = 4) {
             console.log('\x1b[36m%s\x1b[0m', '-------------------------');
         }
 
-        const parsed = JSON.parse(response.data.response);
+        let rawResponse = response.data.response;
+        // Clean up <think> tags if present in the main response
+        rawResponse = rawResponse.replace(/<think>[\s\S]*?<\/think>/g, '');
+        // Clean up markdown code blocks if present
+        rawResponse = rawResponse.replace(/```json/g, '').replace(/```/g, '');
+        // Trim whitespace
+        rawResponse = rawResponse.trim();
+
+        console.log('Sanitized AI Response:', rawResponse.substring(0, 100) + '...');
+
+        const parsed = JSON.parse(rawResponse);
         return Array.isArray(parsed.ideas) ? parsed.ideas : [];
     } catch (error) {
         console.error('Generating Ideas with Ai failed:', error.message);
@@ -243,9 +261,11 @@ async function generateIdeasFromTrends(trends, featuresPerIdea = 4) {
 }
 
 app.get('/api/trends', async (req, res) => {
-    // Extract featuresPerIdea from query params, default to 4
+    console.log('--- Incoming Request: GET /api/trends ---');
+    // Extract featuresPerIdea and model from query params
     const featuresPerIdea = parseInt(req.query.featuresPerIdea) || 4;
-    
+    const model = req.query.model || DEFAULT_MODEL;
+
     // 0. Check Cache
     try {
         if (fs.existsSync(CACHE_FILE)) {
@@ -293,9 +313,9 @@ app.get('/api/trends', async (req, res) => {
     }
 
     console.log(`Gathered ${headlines.length} signals. Transmuting into ideas with ${featuresPerIdea} features per idea...`);
-    
+
     try {
-        const ideas = await generateIdeasFromTrends(headlines, featuresPerIdea);
+        const ideas = await generateIdeasFromTrends(headlines, featuresPerIdea, model);
 
         // 4. Save to Cache
         if (ideas.length > 0) {
@@ -339,7 +359,7 @@ app.get('/api/trends', async (req, res) => {
 app.post('/api/prompts', (req, res) => {
     try {
         const { id, prompt, selections, selectedModel, timestamp } = req.body;
-        
+
         if (!id || !prompt) {
             return res.status(400).json({ error: 'Missing required fields: id, prompt' });
         }
@@ -359,7 +379,7 @@ app.post('/api/prompts', (req, res) => {
         // Save to individual file with ID appended
         const fileName = `megaPrompt-${id}.json`;
         const filePath = path.join(MEGA_PROMPTS_DIR, fileName);
-        
+
         try {
             fs.writeFileSync(filePath, JSON.stringify(promptData, null, 2));
             console.log(`Saved mega prompt to file: ${fileName}`);
@@ -378,11 +398,11 @@ app.post('/api/prompts', (req, res) => {
 app.get('/api/prompts/:id', (req, res) => {
     try {
         const { id } = req.params;
-        
+
         // Read from individual mega prompt file
         const fileName = `megaPrompt-${id}.json`;
         const filePath = path.join(MEGA_PROMPTS_DIR, fileName);
-        
+
         if (fs.existsSync(filePath)) {
             try {
                 const promptData = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
@@ -404,15 +424,15 @@ app.get('/api/prompts/:id', (req, res) => {
 // AI-powered tech stack selection endpoint
 app.post('/api/auto-select-stack', async (req, res) => {
     try {
-        const { selections } = req.body;
-        
+        const { selections, model } = req.body;
+
         if (!selections || !Array.isArray(selections)) {
             return res.status(400).json({ error: 'Selections array is required' });
         }
 
         // Create a summary of user's current selections
         const userGoals = selections.map(s => `${s.category}: ${s.label}`).join('\n');
-        
+
         const prompt = `
         You are a senior software architect and tech stack expert. Analyze the user's project goals and recommend the optimal tech stack.
 
@@ -460,9 +480,9 @@ app.post('/api/auto-select-stack', async (req, res) => {
         `;
 
         console.log('Getting AI tech stack recommendations...');
-        
+
         const response = await axios.post(`${OLLAMA_URL}/api/generate`, {
-            model: DEFAULT_MODEL,
+            model: model || DEFAULT_MODEL,
             prompt: prompt,
             stream: false,
             format: {
@@ -491,7 +511,15 @@ app.post('/api/auto-select-stack', async (req, res) => {
 
         let recommendations;
         try {
-            recommendations = JSON.parse(response.data.response);
+            let rawResponse = response.data.response;
+            // Clean up <think> tags if present in the main response
+            rawResponse = rawResponse.replace(/<think>[\s\S]*?<\/think>/g, '');
+            // Clean up markdown code blocks if present
+            rawResponse = rawResponse.replace(/```json/g, '').replace(/```/g, '');
+            // Trim whitespace
+            rawResponse = rawResponse.trim();
+
+            recommendations = JSON.parse(rawResponse);
         } catch (parseError) {
             console.error('Failed to parse AI response:', parseError.message);
             // Fallback to basic recommendations
@@ -515,7 +543,7 @@ app.post('/api/auto-select-stack', async (req, res) => {
         } else if (error.code === 'ECONNREFUSED') {
             console.error('Could not connect to Ollama. Is Ollama running?');
         }
-        
+
         // Fallback recommendations
         const fallbackStack = [
             { id: 'web', category: 'Platform', label: 'Web Application' },
@@ -525,8 +553,281 @@ app.post('/api/auto-select-stack', async (req, res) => {
             { id: 'supabase', category: 'Database / Storage', label: 'Supabase' },
             { id: 'tailwind', category: 'UI & Styling', label: 'Tailwind CSS' }
         ];
-        
+
         res.json(fallbackStack);
+    }
+});
+
+app.post('/api/ui-preview', async (req, res) => {
+    try {
+        const { megaPrompt, model } = req.body || {};
+
+        if (!megaPrompt || typeof megaPrompt !== 'string') {
+            return res.status(400).json({ error: 'megaPrompt (string) is required' });
+        }
+
+        const uiPrompt = `
+You are generating a UI PREVIEW JSON in the SAME SHAPE as the json-render.dev playground.
+
+Input: a "Mega Prompt" describing a software project.
+Output: ONLY JSON (no markdown) with this exact schema:
+
+{
+  "root": "some_key",
+  "elements": {
+    "some_key": {
+      "key": "some_key",
+      "type": "Stack" | "Grid" | "Card" | "Text" | "Badge" | "List" | "ListItem" | "Divider" | "Button" | "Input" | "Markdown" | "Placeholder" | "KeyValue",
+      "props": { ... },
+      "children"?: ["child_key", ...]
+    }
+  }
+}
+
+Rules:
+- keys must be unique strings
+- children must reference keys in elements
+- Only use these component types: Stack, Grid, Card, Text, Badge, List, ListItem, Divider, Button, Input, Markdown, Placeholder, KeyValue
+
+Component props:
+- Stack.props: { "direction": "vertical"|"horizontal", "gap"?: "2"|"4"|"6"|"8"|"10" }
+- Grid.props: { "columns": 1|2|3, "gap"?: "2"|"4"|"6"|"8"|"10" }
+- Card.props: { "title"?: string }
+- Text.props: { "text": string, "variant"?: "title"|"subtitle"|"body"|"muted" }
+- Badge.props: { "text": string }
+- List.props: { "title"?: string }
+- ListItem.props: { "title": string, "description"?: string }
+- Divider.props: { }
+- Button.props: { "text": string, "variant"?: "primary"|"secondary"|"ghost" }
+- Input.props: { "label"?: string, "placeholder"?: string }
+- Markdown.props: { "text": string }
+- Placeholder.props: { "title": string, "description"?: string }
+- KeyValue.props: { "title"?: string, "items": [{ "label": string, "value": string }] }
+
+Goal:
+- Create a plausible product UI preview for what the MegaPrompt describes.
+- Include: product name/header, nav/tabs (as horizontal Stack of Badges), key screens/flows, and a few feature cards.
+
+MEGA PROMPT:
+${megaPrompt}
+        `.trim();
+
+        const response = await axios.post(`${OLLAMA_URL}/api/generate`, {
+            model: model || DEFAULT_MODEL,
+            prompt: uiPrompt,
+            stream: false,
+            format: {
+                type: 'object',
+                properties: {
+                    root: { type: 'string' },
+                    elements: { type: 'object' }
+                },
+                required: ['root', 'elements']
+            }
+        }, {
+            timeout: 120000,
+            maxContentLength: 50 * 1024 * 1024,
+            maxBodyLength: 50 * 1024 * 1024
+        });
+
+        let rawResponse = response.data.response;
+        rawResponse = rawResponse.replace(/<think>[\s\S]*?<\/think>/g, '');
+        rawResponse = rawResponse.replace(/```json/g, '').replace(/```/g, '');
+        rawResponse = rawResponse.trim();
+
+        try {
+            const preview = JSON.parse(rawResponse);
+
+            const toGraph = (tree) => {
+                if (!tree || typeof tree !== 'object') return null;
+
+                if (typeof tree.root === 'string' && tree.elements && typeof tree.elements === 'object') {
+                    return tree;
+                }
+
+                if (typeof tree.type !== 'string') return null;
+
+                let counter = 0;
+                const elements = {};
+
+                const walk = (node) => {
+                    counter += 1;
+                    const key = (node && typeof node.key === 'string' && node.key) ? node.key : `el_${counter}`;
+                    elements[key] = {
+                        key,
+                        type: node.type,
+                        props: (node.props && typeof node.props === 'object') ? node.props : {}
+                    };
+
+                    if (Array.isArray(node.children) && node.children.length > 0) {
+                        // Only treat as nested children if they are objects
+                        if (typeof node.children[0] === 'object') {
+                            elements[key].children = node.children.map(walk);
+                        }
+                    }
+
+                    return key;
+                };
+
+                const root = walk(tree);
+                return { root, elements };
+            };
+
+            const graph = toGraph(preview);
+            if (!graph) {
+                return res.json({
+                    root: 'screen',
+                    elements: {
+                        screen: {
+                            key: 'screen',
+                            type: 'Stack',
+                            props: { direction: 'vertical', gap: '6' },
+                            children: ['title', 'card']
+                        },
+                        title: {
+                            key: 'title',
+                            type: 'Text',
+                            props: { variant: 'title', text: 'UI Preview' }
+                        },
+                        card: {
+                            key: 'card',
+                            type: 'Card',
+                            props: { title: 'Invalid Preview Format' },
+                            children: ['msg']
+                        },
+                        msg: {
+                            key: 'msg',
+                            type: 'Text',
+                            props: { variant: 'body', text: 'Model output was not a valid graph or nested tree.' }
+                        }
+                    }
+                });
+            }
+
+            if (graph && typeof graph === 'object' && graph.elements && typeof graph.elements === 'object') {
+                for (const [k, v] of Object.entries(graph.elements)) {
+                    if (v && typeof v === 'object' && !v.key) {
+                        v.key = k;
+                    }
+                }
+
+                if (!graph.root || !graph.elements[graph.root]) {
+                    const keys = Object.keys(graph.elements);
+                    if (keys.length > 0) {
+                        graph.root = keys[0];
+                    }
+                }
+
+                const toTitle = (s) => {
+                    if (!s || typeof s !== 'string') return 'Missing section';
+                    const cleaned = s.replace(/[_-]+/g, ' ').trim();
+                    if (!cleaned) return 'Missing section';
+                    return cleaned.replace(/\b\w/g, (c) => c.toUpperCase());
+                };
+
+                const ensureElement = (key) => {
+                    if (typeof key !== 'string' || !key) return;
+                    if (graph.elements[key]) return;
+                    graph.elements[key] = {
+                        key,
+                        type: 'Text',
+                        props: { variant: 'muted', text: toTitle(key) }
+                    };
+                };
+
+                const visited = new Set();
+                const queue = [graph.root];
+                while (queue.length > 0) {
+                    const k = queue.shift();
+                    if (typeof k !== 'string' || !k) continue;
+                    if (visited.has(k)) continue;
+                    visited.add(k);
+
+                    if (!graph.elements[k]) {
+                        ensureElement(k);
+                    }
+
+                    const el = graph.elements[k];
+                    if (!el || typeof el !== 'object') continue;
+
+                    if (!el.key) el.key = k;
+                    if (!Array.isArray(el.children)) continue;
+
+                    for (const child of el.children) {
+                        if (typeof child === 'string') {
+                            ensureElement(child);
+                            queue.push(child);
+                        }
+                    }
+                }
+            }
+
+            return res.json(graph);
+        } catch (parseError) {
+            console.error('Failed to parse ui-preview JSON:', parseError.message);
+        }
+
+        return res.json({
+            root: 'screen',
+            elements: {
+                screen: {
+                    key: 'screen',
+                    type: 'Stack',
+                    props: { direction: 'vertical', gap: '6' },
+                    children: ['title', 'card']
+                },
+                title: {
+                    key: 'title',
+                    type: 'Text',
+                    props: { variant: 'title', text: 'UI Preview' }
+                },
+                card: {
+                    key: 'card',
+                    type: 'Card',
+                    props: { title: 'Preview Unavailable' },
+                    children: ['msg']
+                },
+                msg: {
+                    key: 'msg',
+                    type: 'Text',
+                    props: { variant: 'body', text: 'Could not parse model output into a json-render preview.' }
+                }
+            }
+        });
+    } catch (error) {
+        console.error('UI preview generation failed:', error.message);
+        return res.json({
+            root: 'screen',
+            elements: {
+                screen: {
+                    key: 'screen',
+                    type: 'Stack',
+                    props: { direction: 'vertical', gap: '6' },
+                    children: ['title', 'card']
+                },
+                title: {
+                    key: 'title',
+                    type: 'Text',
+                    props: { variant: 'title', text: 'UI Preview' }
+                },
+                card: {
+                    key: 'card',
+                    type: 'Card',
+                    props: { title: 'Preview Error' },
+                    children: ['msg', 'detail']
+                },
+                msg: {
+                    key: 'msg',
+                    type: 'Text',
+                    props: { variant: 'body', text: 'Failed to generate preview.' }
+                },
+                detail: {
+                    key: 'detail',
+                    type: 'Text',
+                    props: { variant: 'muted', text: String(error.message || error) }
+                }
+            }
+        });
     }
 });
 
@@ -537,8 +838,8 @@ app.get('/api/cache-check', (req, res) => {
             const cacheData = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf-8'));
             const now = Date.now();
             const isValid = now - cacheData.timestamp < CACHE_TTL;
-            res.json({ 
-                exists: true, 
+            res.json({
+                exists: true,
                 valid: isValid,
                 timestamp: cacheData.timestamp
             });

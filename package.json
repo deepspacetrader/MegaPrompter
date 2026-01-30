@@ -4,12 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "server": "node server/index.js",
-    "start": "concurrently \"npm run server\" \"npm run dev\"",
-    "build": "tsc -b && vite build",
-    "lint": "eslint .",
-    "preview": "vite preview"
+    "dev": "concurrently \"npm run server\" \"vite\"",
+    "server": "nodemon server/index.js",
+    "preview": "vite preview",
+    "lint": "eslint ."
   },
   "dependencies": {
     "@json-render/core": "^0.2.0",

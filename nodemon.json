@@ -1,0 +1,8 @@
+{
+    "ignore": [
+        "server/idea_cache.json",
+        "server/mega_prompts/*",
+        "server/storage/*",
+        "storage/*"
+    ]
+}

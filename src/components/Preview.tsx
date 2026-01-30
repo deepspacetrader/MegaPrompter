@@ -33,13 +33,6 @@ export const Preview = ({
                         <Code2 className="w-6 h-6 text-primary" />
                         JSON Preview
                     </h2>
-                    <button
-                        onClick={openInstantPreview}
-                        className="flex items-center gap-2 text-xs font-bold text-primary hover:text-primary/80 transition-colors uppercase tracking-widest"
-                    >
-                        Instant Preview
-                        <ExternalLink className="w-3.5 h-3.5" />
-                    </button>
                 </div>
 
                 <div className="relative group">
@@ -83,12 +76,21 @@ export const Preview = ({
                     <Sparkles className="w-6 h-6 text-primary" />
                     Mega Prompt Ready
                 </h2>
-                <button
-                    onClick={() => setGeneratedResult(null)}
-                    className="text-xs font-bold text-muted-foreground hover:text-white transition-colors uppercase tracking-widest"
-                >
-                    Reset
-                </button>
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={openInstantPreview}
+                        className="flex items-center gap-2 text-xs font-bold text-primary hover:text-primary/80 transition-colors uppercase tracking-widest"
+                    >
+                        See Preview
+                        <ExternalLink className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                        onClick={() => setGeneratedResult(null)}
+                        className="text-xs font-bold text-muted-foreground hover:text-white transition-colors uppercase tracking-widest"
+                    >
+                        Reset
+                    </button>
+                </div>
             </div>
 
             <div className="space-y-4">

@@ -1,9 +1,10 @@
 import { useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { ProjectOption, Selection } from '../types'
-import { PROJECT_IDEATION } from '../constants'
+import { PROJECT_IDEATION, DEFAULT_MODELS } from '../constants'
 import { Compass, Undo2, ChevronLeft, ChevronRight, Plus, Sparkles, Check, X, Database, NotebookPen, Brain, Goal } from 'lucide-react'
 import { useCacheCheck } from '../hooks/useCacheCheck'
+import { IdeaRationaleModal } from './IdeaRationaleModal'
 
 interface ProjectBuilderProps {
     navStack: { title: string; options: ProjectOption[] }[];
@@ -16,6 +17,12 @@ interface ProjectBuilderProps {
     selections: Selection[];
     onAutoSelect: () => void;
     isAutoSelecting?: boolean;
+    trends?: {
+        totalSignals: number
+        sources: string[]
+        sampleHeadlines: string[]
+    } | null;
+    selectedModel?: string;
 }
 
 export const ProjectBuilder = ({
@@ -28,7 +35,9 @@ export const ProjectBuilder = ({
     addCustom,
     selections,
     onAutoSelect,
-    isAutoSelecting = false
+    isAutoSelecting = false,
+    trends = null,
+    selectedModel = DEFAULT_MODELS[1] // deepseek-r1:8b
 }: ProjectBuilderProps) => {
     const [otherValueScope, setOtherValueScope] = useState('');
     const [isOtherActiveScope, setIsOtherActiveScope] = useState(false);
@@ -38,10 +47,11 @@ export const ProjectBuilder = ({
     const [isSyncing, setIsSyncing] = useState(false);
     const [featuresPerIdea, setFeaturesPerIdea] = useState(4);
     const [minIdeasToGenerate, setMinIdeasToGenerate] = useState(5);
+    const [selectedIdeaForRationale, setSelectedIdeaForRationale] = useState<any>(null);
     const { useCache, setUseCache } = useCacheCheck();
 
     // Retry utility for API calls
-    const fetchWithRetry = async (url: string, options: RequestInit = {}, retries = 3) => {
+    const fetchWithRetry = async (url: string, options: RequestInit = {}, retries = 7) => {
         for (let attempt = 1; attempt <= retries; attempt++) {
             try {
                 const response = await fetch(url, {
@@ -49,9 +59,8 @@ export const ProjectBuilder = ({
                     signal: AbortSignal.timeout(150000) // 150 second timeout to allow for server processing
                 });
                 if (response.ok) return response;
-                
-                console.log(`API call failed with status ${response.status} (attempt ${attempt}/${retries})`);
-                if (attempt === retries) throw new Error(`Failed after ${retries} attempts`);
+
+                throw new Error(`API returned ${response.status}`);
             } catch (error) {
                 console.error(`API call error (attempt ${attempt}/${retries}):`, error);
                 if (attempt === retries) throw error;
@@ -68,7 +77,8 @@ export const ProjectBuilder = ({
             const cacheParam = !useCache ? '?force=true' : '';
             const featuresParam = featuresPerIdea !== 4 ? (cacheParam ? '&' : '?') + `featuresPerIdea=${featuresPerIdea}` : '';
             const minIdeasParam = minIdeasToGenerate !== 5 ? (cacheParam || featuresParam ? '&' : '?') + `minIdeas=${minIdeasToGenerate}` : '';
-            const url = `/api/trends${cacheParam}${featuresParam}${minIdeasParam}`;
+            const modelParam = (cacheParam || featuresParam || minIdeasParam ? '&' : '?') + `model=${encodeURIComponent(selectedModel)}`;
+            const url = `/api/trends${cacheParam}${featuresParam}${minIdeasParam}${modelParam}`;
             const response = await fetchWithRetry(url);
             if (response.ok) {
                 const data = await response.json();
@@ -150,7 +160,7 @@ export const ProjectBuilder = ({
         const filtered = selections.filter(s => {
             if (s.category === 'Custom') return true;
             if (s.category === 'feature') return true; // Include AI-generated idea features
-            
+
             // Check if category matches any PROJECT_IDEATION option or its sub-options
             return PROJECT_IDEATION.some(p => {
                 if (p.label === s.category) return true;
@@ -160,14 +170,14 @@ export const ProjectBuilder = ({
                 return false;
             });
         });
-        
+
         // console.log('totalCustomDirectives calculation:', {
         //     totalSelections: selections.length,
         //     selections: selections,
         //     filtered: filtered,
         //     finalCount: filtered.length
         // });
-        
+
         return filtered.length;
     }, [selections]);
 
@@ -188,7 +198,7 @@ export const ProjectBuilder = ({
                         </span>
                     </h3>
                     <span className="text-xs text-center text-muted-foreground/60 tracking-widest font-bold">
-                         Choose a path to start building your project
+                        Choose a path to start building your project
                     </span>
 
                     {ideationStack.length > 0 && (
@@ -237,17 +247,42 @@ export const ProjectBuilder = ({
                                                 {parentOption.label}
                                             </h4>
                                         </div>
-                                        
-                                       
-                                        
+
+
+
                                         {/* Description */}
-                                        <p className="text-sm text-white/80 leading-relaxed">
+                                        <p className="text-sm text-white/80 leading-relaxed mb-4">
                                             {parentOption.description}
                                         </p>
+
+                                        {/* Rationale / Why this? */}
+                                        {parentOption.rationale && (
+                                            <div className="p-3 rounded-xl bg-primary/10 border border-primary/20 relative">
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <div className="flex items-center gap-2">
+                                                        <Sparkles className="w-3.5 h-3.5 text-primary" />
+                                                        <span className="text-[10px] font-bold uppercase tracking-widest text-primary">
+                                                            Why was this chosen?
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <p className="text-xs text-muted-foreground leading-relaxed italic line-clamp-3 pr-32">
+                                                    {parentOption.rationale}
+                                                </p>
+                                                <button 
+                                                    className="text-xs text-primary/60 p-1.5 rounded-lg bg-primary/5 hover:bg-primary/15 transition-colors border border-primary/10 absolute bottom-3 right-3"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation()
+                                                        setSelectedIdeaForRationale(parentOption)
+                                                    }}>
+                                                    See detailed analysis →
+                                                </button>
+                                            </div>
+                                        )}
                                     </motion.div>
                                 ) : null;
                             })()}
-                            
+
                             <motion.div
                                 key="ideation-flow"
                                 initial={{ opacity: 0, scale: 0.98 }}
@@ -256,117 +291,117 @@ export const ProjectBuilder = ({
                                 transition={{ duration: 0.2 }}
                                 className="grid grid-cols-1 sm:grid-cols-2 gap-3"
                             >
-                            {ideationStack[ideationStack.length - 1].options.map((opt: ProjectOption) => {
-                                // Determine if we are currently viewing the features of an AI-generated idea
-                                const isViewingAIFeatures = ideationStack.length > 1 && 
-                                                         ideationStack[0].title === 'Live Trending Tech' &&
-                                                         ideationStack[ideationStack.length - 1].title !== 'Live Trending Tech';
+                                {ideationStack[ideationStack.length - 1].options.map((opt: ProjectOption) => {
+                                    // Determine if we are currently viewing the features of an AI-generated idea
+                                    const isViewingAIFeatures = ideationStack.length > 1 &&
+                                        ideationStack[0].title === 'Live Trending Tech' &&
+                                        ideationStack[ideationStack.length - 1].title !== 'Live Trending Tech';
 
-                                // If we are viewing AI features, only show the features (not other AI ideas)
-                                // Hide any option that has features (which indicates it's an AI idea, not a feature)
-                                if (isViewingAIFeatures && opt.features) {
-                                    return null; 
-                                }
-                                
-                                const active = isSelected(opt);
-                                const selectedCount = getRecursiveSelectedCount(opt);
-                                return (
-                                    <motion.button
-                                        key={opt.id}
-                                        whileHover={{ scale: 1.01, backgroundColor: 'rgba(255,255,255,0.05)' }}
-                                        whileTap={{ scale: 0.98 }}
-                                        onClick={() => {
-                                            if (opt.features) {
-                                                // For AI-generated ideas, add features as a new level
-                                                if (ideationStack[0].title === 'Live Trending Tech') {
-                                                    setIdeationStack([...ideationStack, { title: opt.label, options: opt.features }]);
+                                    // If we are viewing AI features, only show the features (not other AI ideas)
+                                    // Hide any option that has features (which indicates it's an AI idea, not a feature)
+                                    if (isViewingAIFeatures && opt.features) {
+                                        return null;
+                                    }
+
+                                    const active = isSelected(opt);
+                                    const selectedCount = getRecursiveSelectedCount(opt);
+                                    return (
+                                        <motion.button
+                                            key={opt.id}
+                                            whileHover={{ scale: 1.01, backgroundColor: 'rgba(255,255,255,0.05)' }}
+                                            whileTap={{ scale: 0.98 }}
+                                            onClick={() => {
+                                                if (opt.features) {
+                                                    // For AI-generated ideas, add features as a new level
+                                                    if (ideationStack[0].title === 'Live Trending Tech') {
+                                                        setIdeationStack([...ideationStack, { title: opt.label, options: opt.features }]);
+                                                    } else {
+                                                        // For regular navigation, add to selections then navigate
+                                                        handleOptionClick(opt, ideationStack[ideationStack.length - 1].title);
+                                                        setIdeationStack([...ideationStack, { title: opt.label, options: opt.features }]);
+                                                    }
                                                 } else {
-                                                    // For regular navigation, add to selections then navigate
-                                                    handleOptionClick(opt, ideationStack[ideationStack.length - 1].title);
-                                                    setIdeationStack([...ideationStack, { title: opt.label, options: opt.features }]);
+                                                    // Check if this is a feature from an AI-generated idea
+                                                    const isFeature = ideationStack.length > 1 &&
+                                                        ideationStack[0].title === 'Live Trending Tech' &&
+                                                        ideationStack[ideationStack.length - 2].title !== 'Live Trending Tech';
+                                                    const category = isFeature ? 'feature' : ideationStack[ideationStack.length - 1].title;
+                                                    handleOptionClick(opt, category);
                                                 }
-                                            } else {
-                                                // Check if this is a feature from an AI-generated idea
-                                                const isFeature = ideationStack.length > 1 && 
-                                                                ideationStack[0].title === 'Live Trending Tech' &&
-                                                                ideationStack[ideationStack.length - 2].title !== 'Live Trending Tech';
-                                                const category = isFeature ? 'feature' : ideationStack[ideationStack.length - 1].title;
-                                                handleOptionClick(opt, category);
-                                            }
-                                        }}
-                                        className={`flex items-center gap-3 p-4 rounded-2xl transition-all text-left border ${active
-                                            ? 'bg-primary/10 border-primary/40'
-                                            : 'glass-card border-white/5 hover:border-white/10'
-                                            }`}
-                                    >
-                                        {opt.icon && <div className="p-2 bg-white/5 rounded-xl flex items-center justify-center">{opt.icon}</div>}
-                                        {!opt.icon && <div className="p-2 bg-orange-500/80 rounded-xl flex items-center justify-center" />}
-                                        <div className="flex flex-col">
-                                            <span className={`text-sm font-medium ${active ? 'text-primary' : 'text-white/80'}`}>
-                                                {opt.label}
-                                            </span>
-                                            {opt.description && (
-                                                <span className="text-xs text-muted-foreground/70 mt-1 line-clamp-2">
-                                                    {opt.description}
-                                                </span>
-                                            )}
-                                            {opt.features && (
-                                                <span className="text-[10px] text-muted-foreground uppercase tracking-tight mt-1">
-                                                    {opt.features.length} more
-                                                </span>
-                                            )}
-                                        </div>
-                                        {selectedCount > 0 && !active && (
-                                            <div className="bg-primary text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold min-w-[18px] text-center ml-auto">
-                                                {selectedCount}
-                                            </div>
-                                        )}
-                                        {opt.features && !selectedCount && <ChevronRight className="w-3.5 h-3.5 ml-auto text-muted-foreground" />}
-                                        {active && <Check className="w-3.5 h-3.5 ml-auto text-primary" />}
-                                    </motion.button>
-                                );
-                            })}
-                            <motion.div
-                                layout
-                                initial={{ opacity: 0, scale: 0.9 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                className={`relative flex items-center justify-between rounded-2xl transition-all border ${isOtherActiveIdeation
-                                    ? 'col-span-full bg-primary/5 border-primary/30 p-2'
-                                    : 'glass-card hover:bg-white/[0.06] border-white/5 p-4 cursor-pointer'
-                                    }`}
-                                onClick={() => !isOtherActiveIdeation && setIsOtherActiveIdeation(true)}
-                            >
-                                {isOtherActiveIdeation ? (
-                                    <div className="flex items-center gap-3 w-full p-1 animate-in fade-in zoom-in duration-200">
-                                        <div className="p-2.5 rounded-xl bg-primary/20 text-primary">
-                                            <Plus className="w-4 h-4" />
-                                        </div>
-                                        <input
-                                            autoFocus
-                                            type="text"
-                                            value={otherValueIdeation}
-                                            onChange={(e) => setOtherValueIdeation(e.target.value)}
-                                            onKeyDown={(e) => e.key === 'Enter' && handleOtherSubmitIdeation()}
-                                            onBlur={() => !otherValueIdeation && setIsOtherActiveIdeation(false)}
-                                            placeholder={`Custom ${ideationStack[ideationStack.length - 1].title}...`}
-                                            className="flex-1 bg-transparent border-none focus:outline-none text-white text-sm font-medium placeholder:text-muted-foreground/50"
-                                        />
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); handleOtherSubmitIdeation(); }}
-                                            className="bg-primary hover:bg-primary/80 text-white text-[10px] font-bold px-4 py-2 rounded-lg shadow-lg shadow-primary/20 transition-all active:scale-95 uppercase tracking-wider"
+                                            }}
+                                            className={`flex items-center gap-3 p-4 rounded-2xl transition-all text-left border ${active
+                                                ? 'bg-primary/10 border-primary/40'
+                                                : 'glass-card border-white/5 hover:border-white/10'
+                                                }`}
                                         >
-                                            Add
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <div className="flex items-center gap-3 w-full">
-                                        <div className="p-2 rounded-xl bg-white/5 text-muted-foreground group-hover:bg-primary/20 transition-colors">
-                                            <Plus className="w-3.5 h-3.5" />
+                                            {opt.icon && <div className="p-2 bg-white/5 rounded-xl flex items-center justify-center">{opt.icon}</div>}
+                                            {!opt.icon && <div className="p-2 bg-orange-500/80 rounded-xl flex items-center justify-center" />}
+                                            <div className="flex flex-col">
+                                                <span className={`text-sm font-medium ${active ? 'text-primary' : 'text-white/80'}`}>
+                                                    {opt.label}
+                                                </span>
+                                                {opt.description && (
+                                                    <span className="text-xs text-muted-foreground/70 mt-1 line-clamp-2">
+                                                        {opt.description}
+                                                    </span>
+                                                )}
+                                                {opt.features && (
+                                                    <span className="text-[10px] text-muted-foreground uppercase tracking-tight mt-1">
+                                                        {opt.features.length} more
+                                                    </span>
+                                                )}
+                                            </div>
+                                            {selectedCount > 0 && !active && (
+                                                <div className="bg-primary text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold min-w-[18px] text-center ml-auto">
+                                                    {selectedCount}
+                                                </div>
+                                            )}
+                                            {opt.features && !selectedCount && <ChevronRight className="w-3.5 h-3.5 ml-auto text-muted-foreground" />}
+                                            {active && <Check className="w-3.5 h-3.5 ml-auto text-primary" />}
+                                        </motion.button>
+                                    );
+                                })}
+                                <motion.div
+                                    layout
+                                    initial={{ opacity: 0, scale: 0.9 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    className={`relative flex items-center justify-between rounded-2xl transition-all border ${isOtherActiveIdeation
+                                        ? 'col-span-full bg-primary/5 border-primary/30 p-2'
+                                        : 'glass-card hover:bg-white/[0.06] border-white/5 p-4 cursor-pointer'
+                                        }`}
+                                    onClick={() => !isOtherActiveIdeation && setIsOtherActiveIdeation(true)}
+                                >
+                                    {isOtherActiveIdeation ? (
+                                        <div className="flex items-center gap-3 w-full p-1 animate-in fade-in zoom-in duration-200">
+                                            <div className="p-2.5 rounded-xl bg-primary/20 text-primary">
+                                                <Plus className="w-4 h-4" />
+                                            </div>
+                                            <input
+                                                autoFocus
+                                                type="text"
+                                                value={otherValueIdeation}
+                                                onChange={(e) => setOtherValueIdeation(e.target.value)}
+                                                onKeyDown={(e) => e.key === 'Enter' && handleOtherSubmitIdeation()}
+                                                onBlur={() => !otherValueIdeation && setIsOtherActiveIdeation(false)}
+                                                placeholder={`Custom ${ideationStack[ideationStack.length - 1].title}...`}
+                                                className="flex-1 bg-transparent border-none focus:outline-none text-white text-sm font-medium placeholder:text-muted-foreground/50"
+                                            />
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); handleOtherSubmitIdeation(); }}
+                                                className="bg-primary hover:bg-primary/80 text-white text-[10px] font-bold px-4 py-2 rounded-lg shadow-lg shadow-primary/20 transition-all active:scale-95 uppercase tracking-wider"
+                                            >
+                                                Add
+                                            </button>
                                         </div>
-                                        <span className="text-sm font-semibold text-muted-foreground">Other / Custom...</span>
-                                    </div>
-                                )}
-                            </motion.div>
+                                    ) : (
+                                        <div className="flex items-center gap-3 w-full">
+                                            <div className="p-2 rounded-xl bg-white/5 text-muted-foreground group-hover:bg-primary/20 transition-colors">
+                                                <Plus className="w-3.5 h-3.5" />
+                                            </div>
+                                            <span className="text-sm font-semibold text-muted-foreground">Other / Custom...</span>
+                                        </div>
+                                    )}
+                                </motion.div>
                             </motion.div>
                         </>
                     ) : (
@@ -522,7 +557,6 @@ export const ProjectBuilder = ({
                                 <motion.button
                                     key={opt.id}
                                     initial={{ opacity: 0, scale: 0.9 }}
-                                    animate={{ opacity: 1, scale: 1 }}
                                     exit={{ opacity: 0, scale: 0.9 }}
                                     whileHover={!isIrrelevant ? { scale: 1.02 } : { scale: 1.01 }}
                                     whileTap={{ scale: 0.98 }}
@@ -532,7 +566,7 @@ export const ProjectBuilder = ({
                                         : isIrrelevant
                                             ? 'glass-card border-white/5 opacity-40 hover:opacity-60 grayscale-[0.5] cursor-pointer'
                                             : 'glass-card hover:bg-white/[0.06] border-white/5 cursor-pointer hover:border-white/10'
-                                        }`}
+                                        } ${opt.rationale && ideationStack[0].title === 'Live Trending Tech' && ideationStack.length === 1 ? 'ring-1 ring-primary/10' : ''}`}
                                 >
                                     <div className="flex items-center gap-4">
                                         {opt.icon ? (
@@ -642,12 +676,12 @@ export const ProjectBuilder = ({
                                     console.log('selections:', selections);
                                     console.log('selections categories:', selections.map(s => s.category));
                                     console.log('==========================');
-                                    
+
                                     if (totalCustomDirectives === 0) {
                                         // Guide user to step 1 first - scroll to the main buttons and animate them
                                         const step1Container = document.querySelector('.step-1')?.closest('.glass-card');
                                         step1Container?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                        
+
                                         // Add pulse animation to the main buttons
                                         setTimeout(() => {
                                             const buttons = step1Container?.querySelectorAll('motion-button button');
@@ -666,11 +700,10 @@ export const ProjectBuilder = ({
                                     }
                                 }}
                                 disabled={isAutoSelecting}
-                                className={`flex items-center justify-between p-5 rounded-2xl transition-all group border ${
-                                    isAutoSelecting
-                                        ? 'bg-orange-500/5 border-orange-500/20 cursor-wait'
-                                        : 'bg-orange-500/10 border-orange-500/40 cursor-pointer shadow-[0_0_15px_rgba(251,146,60,0.1)] hover:bg-orange-500/20'
-                                }`}
+                                className={`flex items-center justify-between p-5 rounded-2xl transition-all group border ${isAutoSelecting
+                                    ? 'bg-orange-500/5 border-orange-500/20 cursor-wait'
+                                    : 'bg-orange-500/10 border-orange-500/40 cursor-pointer shadow-[0_0_15px_rgba(251,146,60,0.1)] hover:bg-orange-500/20'
+                                    }`}
                             >
                                 {isAutoSelecting && (
                                     <motion.div
@@ -767,6 +800,13 @@ export const ProjectBuilder = ({
                     </div>
                 </motion.div>
             </div>
+
+            {/* Rationale Modal */}
+            <IdeaRationaleModal
+                idea={selectedIdeaForRationale}
+                trends={trends}
+                onClose={() => setSelectedIdeaForRationale(null)}
+            />
         </div >
     )
 }

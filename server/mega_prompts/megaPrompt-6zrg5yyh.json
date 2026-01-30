@@ -1,0 +1,58 @@
+{
+  "id": "6zrg5yyh",
+  "prompt": "# Mega Prompt: Robotaxi Economics Monitor\n\n```markdown\n# Project Essence & Vision\nThe **Robotaxi Economics Monitor** is an autonomous development project designed to create a comprehensive dashboard for analyzing robotaxi economics. The system will provide real-time user demand forecasting, market share analysis, cost comparisons, and performance metrics visualization. The project employs the Ralph Loop methodology for iterative development with continuous learning and adaptation.\n\n## Ralph-Friendly PRD.md\n```markdown\n## Core Requirements\n\n### Feature: User Demand and Behavior Forecasting\n```gherkin\nFeature: User Demand Forecasting\n  As a Transportation Analyst\n  I want to visualize predicted demand patterns\n  So I can anticipate market fluctuations\n\n  Scenario: Historical Demand Analysis\n    Given the last 30 days of demand data\n    When I select the \"Historical\" view\n    Then I should see trends in demand patterns\n\n  Scenario: Predictive Modeling\n    Given the current date and market conditions\n    When I select the \"Predictive\" view\n    Then I should see a 7-day forecast with confidence intervals\n```\n\n### Feature: Market Share Analysis\n```gherkin\nFeature: Market Share Analysis\n  As a Strategic Planner\n  I want to compare our robotaxi market share\n  So I can identify competitive advantages\n\n  Scenario: Current Market Share\n    Given the latest competitor data\n    When I select \"Current Share\"\n    Then I should see a comparative visualization\n\n  Scenario: Share Trend Analysis\n    Given historical data over 6 months\n    When I select \"Trend Analysis\"\n    Then I should see seasonal patterns and growth\n```\n\n### Feature: Robotaxi Cost Comparison\n```gherkin\nFeature: Cost Comparison Dashboard\n  As a Financial Officer\n  I want to analyze operational costs\n  So I can optimize resource allocation\n\n  Scenario: Cost Breakdown\n    Given operational data from the last quarter\n    When I select \"Cost Breakdown\"\n    Then I should see categorized expense visualization\n\n  Scenario: ROI Analysis\n    Given revenue and operational data\n    When I select \"ROI Analysis\"\n    Then I should see profitability metrics\n```\n\n### Feature: Performance Metrics Dashboard\n```gherkin\nFeature: Performance Metrics Dashboard\n  As a System Administrator\n  I want to monitor system health\n  So I can ensure optimal performance\n\n  Scenario: System Health Check\n    Given system logs from the last 24 hours\n    When I select \"System Health\"\n    Then I should see uptime, error rates, and response times\n\n  Scenario: Performance Benchmarking\n    Given historical performance data\n    When I select \"Benchmarking\"\n    Then I should see comparative performance metrics\n```\n\n### Feature: Frontend Requirements\n```typescript\n// TypeScript Type Definitions\ninterface UserDemandData {\n  date: string;\n  demand: number;\n  confidence: number;\n}\n\n// Component Specifications\nconst ForecastingDashboard: React.FC<{\n  data: UserDemandData[];\n}> = () => { ... };\n\nconst MarketShareChart: React.FC<{ \n  marketShare: number; \n  competitors: Array<{ name: string, share: number }> \n}> = () => { ... };\n```\n\n### Feature: Backend Requirements\n```typescript\n// API Endpoints\nconst API = {\n  '/demand/forecast': {\n    method: 'GET',\n    params: { date: string },\n    response: { data: UserDemandData[] }\n  },\n  '/market/share': {\n    method: 'GET',\n    response: { marketShare: number, competitors: Array<{ name: string, share: number }> }\n  }\n};\n```\n\n### Feature: NLP Integration\n```typescript\n// Ollama Model Integration\nconst analyzeText = async (input: string): Promise<string> => {\n  const response = await fetch('http://localhost:11434/api/generate', {\n    method: 'POST',\n    headers: { 'Content-Type': 'application/json' },\n    body: JSON.stringify({\n      model: 'llama3',\n      prompt: input\n    })\n  });\n  // Process response\n};\n```\n\n## Technical Stack\n```json\n{\n  \"frontend\": {\n    \"framework\": \"React.js\",\n    \"language\": \"TypeScript\",\n    \"styles\": \"Tailwind CSS\"\n  },\n  \"backend\": {\n    \"runtime\": \"Node.js\",\n    \"framework\": \"Express\"\n  },\n  \"ai\": {\n    \"local\": \"Ollama Models\",\n    \"models\": [\"llama3\", \"mistral\"]\n  },\n  \"dependencies\": {\n    \"react\": \"^18.2.0\",\n    \"express\": \"^4.17.1\"\n  }\n}\n```\n\n## Design Aesthetics\n```markdown\n### Design Constraints\n- **Aesthetic Style**: Neo-Brutalism\n  - Use high contrast colors: black, white, primary accent\n  - Minimal UI elements with clear typography\n  - Bold grid layouts and stark visual hierarchy\n- **Responsiveness**: Mobile-first design\n  - Adapts to all screen sizes\n  - Prioritizes core functionality on small screens\n```\n\n## Safety & Security\n```markdown\n### Constraints\n- All user data must be anonymized\n- Implement rate limiting for API endpoints\n- Fallback mechanisms for model failures\n- Comprehensive error handling\n```\n\n## Institutional Memory (agents.md)\n```markdown\n### Rules\n```json\n{\n  \"rules\": [\n    {\n      \"rule_id\": \"R001\",\n      \"description\": \"Always commit changes with clear, descriptive messages\",\n      \"priority\": \"HIGH\",\n      \"enabled\": true\n    },\n    {\n      \"rule_id\": \"R002\",\n      \"description\": \"Version control all generated assets\",\n      \"priority\": \"HIGH\",\n      \"enabled\": true\n    },\n    {\n      \"rule_id\": \"R003\",\n      \"description\": \"Maintain a changelog for all modifications\",\n      \"priority\": \"MEDIUM\",\n      \"enabled\": true\n    }\n  ]\n}\n```\n\n### Patterns\n```json\n{\n  \"patterns\": [\n    {\n      \"pattern_id\": \"P001\",\n      \"description\": \"Component-based architecture for UI elements\",\n      \"examples\": [\"ForecastingDashboard\", \"MarketShareChart\"]\n    },\n    {\n      \"pattern_id\": \"P002\",\n      \"description\": \"REST API design for backend services\",\n      \"examples\": [\"/demand/forecast\", \"/market/share\"]\n    }\n  ]\n}\n```\n\n### Learnings\n```json\n{\n  \"learnings\": [\n    {\n      \"topic\": \"TypeScript\",\n      \"insight\": \"Use generics for reusable components\",\n      \"examples\": [\"React.FC generics\"]\n    },\n    {\n      \"topic\": \"NLP\",\n      \"insight\": \"Local models provide faster inference\",\n      \"examples\": [\"Ollama integration pattern\"]\n    }\n  ]\n}\n```\n\n## AI Implementation Strategy\n```markdown\n### Development Phases\n1. **Phase 1: Foundation**\n   - Set up project structure\n   - Implement basic UI components\n   - Create mock data endpoints\n\n2. **Phase 2: Core Functionality**\n   - Build forecasting algorithms\n   - Develop market analysis features\n   - Implement cost comparison dashboard\n\n3. **Phase 3: Refinement**\n   - Add NLP capabilities\n   - Implement design system\n   - Optimize performance\n\n4. **Phase 4: Expansion**\n   - Add advanced analytics features\n   - Integrate with external data sources\n   - Deploy monitoring systems\n```\n\n### Execution Rules\n```json\n{\n  \"execution\": {\n    \"priority\": {\n      \"critical\": [\"System Health\", \"Core Algorithms\"],\n      \"normal\": [\"Dashboard UI\", \"Market Analysis\"],\n      \"low\": [\"Documentation\", \"Testing\"]\n    },\n    \"fallback\": {\n      \"model_failure\": \"Fallback to default response\",\n      \"api_timeout\": \"Return cached data if available\"\n    }\n  }\n}\n```\n```",
+  "selections": [
+    {
+      "id": "user_demand_forecasting",
+      "category": "Robotaxi Economics Monitor",
+      "label": "User Demand and Behavior Forecasting"
+    },
+    {
+      "id": "market_share",
+      "category": "Robotaxi Economics Monitor",
+      "label": "Market Share Analysis"
+    },
+    {
+      "id": "cost_comparison",
+      "category": "Robotaxi Economics Monitor",
+      "label": "Robotaxi Cost Comparison"
+    },
+    {
+      "id": "performance_metrics",
+      "category": "Robotaxi Economics Monitor",
+      "label": "Performance Metrics Dashboard"
+    },
+    {
+      "id": "typescript",
+      "category": "Frontend Framework",
+      "label": "TypeScript"
+    },
+    {
+      "id": "react",
+      "category": "Frontend Framework",
+      "label": "React.js"
+    },
+    {
+      "id": "node",
+      "category": "Backend & API",
+      "label": "Node.js / Express"
+    },
+    {
+      "id": "tailwind",
+      "category": "UI & Styling",
+      "label": "Tailwind CSS"
+    },
+    {
+      "id": "ollama",
+      "category": "Chat Bots & NLP",
+      "label": "Local Ollama Models"
+    },
+    {
+      "id": "brutalist",
+      "category": "Design Aesthetics",
+      "label": "Neo-Brutalism"
+    }
+  ],
+  "selectedModel": "deepseek-r1:8b",
+  "timestamp": "2026-01-28T02:28:40.098Z"
+}
