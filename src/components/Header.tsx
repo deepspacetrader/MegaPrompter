@@ -3,12 +3,12 @@ import { Rocket, Settings, RotateCcw } from 'lucide-react'
 interface HeaderProps {
     selectedModel: string;
     setSelectedModel: (model: string) => void;
-    ollamaModels: string[];
+    lmStudioModels: string[];
     onOpenSettings: () => void;
     onRestart: () => void;
 }
 
-export const Header = ({ selectedModel, setSelectedModel, ollamaModels, onOpenSettings, onRestart }: HeaderProps) => {
+export const Header = ({ selectedModel, setSelectedModel, lmStudioModels, onOpenSettings, onRestart }: HeaderProps) => {
     return (
         <header className="glass-card rounded-3xl p-6 flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex items-center gap-4">
@@ -31,7 +31,7 @@ export const Header = ({ selectedModel, setSelectedModel, ollamaModels, onOpenSe
                         onChange={(e) => setSelectedModel(e.target.value)}
                         className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary/50 transition-all"
                     >
-                        {ollamaModels.map(m => <option key={m} value={m} className="bg-gray-900 text-white">{m}</option>)}
+                        {lmStudioModels.map(m => <option key={m} value={m} className="bg-gray-900 text-white">{m}</option>)}
                     </select>
                 </div>
                 <button

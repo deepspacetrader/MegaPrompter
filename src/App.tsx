@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
-import type { Selection, ProjectOption } from './types'
+import type { Selection, ProjectOption, AIModelSettings } from './types'
 import { PROJECT_TYPES, DEFAULT_MODELS, RECOMMENDATIONS_MAP, ARCHITECT_SYSTEM_PROMPT } from './constants'
 import { Header } from './components/Header'
 import { Trends } from './components/Trends'
@@ -42,7 +42,7 @@ function App() {
 
   const [navStack, setNavStack] = useState<NavItem[]>([{ title: 'Project Type', options: PROJECT_TYPES }]);
   const [customReq, setCustomReq] = useState('');
-  const [ollamaModels, setOllamaModels] = useState<string[]>(DEFAULT_MODELS);
+  const [lmStudioModels, setLmStudioModels] = useState<string[]>(DEFAULT_MODELS);
   const [selectedModel, setSelectedModel] = useState(DEFAULT_MODELS[0]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isAutoSelecting, setIsAutoSelecting] = useState(false);
@@ -52,7 +52,7 @@ function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isInstantPreviewOpen, setIsInstantPreviewOpen] = useState(false);
   const [isRestartConfirmOpen, setIsRestartConfirmOpen] = useState(false);
-  const [ollamaUrl, setOllamaUrl] = useState('http://localhost:11434');
+  const [lmStudioUrl, setLmStudioUrl] = useState('http://localhost:1234');
   const [systemPrompt, setSystemPrompt] = useState(ARCHITECT_SYSTEM_PROMPT);
   const [selectedHeadline, setSelectedHeadline] = useState<{
     original: string
@@ -61,15 +61,31 @@ function App() {
     analysis: any
     timestamp: string
   } | null>(null);
+  const [trends, setTrends] = useState<{
+    totalSignals: number
+    sources: string[]
+    sampleHeadlines: string[]
+  } | null>(null);
+  const [generatedIdeas, setGeneratedIdeas] = useState<any[]>([]);
+  const [isLoadingTrends, setIsLoadingTrends] = useState(false);
+
+  // AI Model Settings
+  const [aiModelSettings, setAiModelSettings] = useState<AIModelSettings>({
+    contextWindow: 4096,
+    maxTokens: 2048,
+    temperature: 0.7,
+    flashAttention: true,
+    quantizationMethod: 'q4_k'
+  });
 
   const fetchModels = async () => {
     try {
-      const response = await fetch(`${ollamaUrl}/api/tags`);
+      const response = await fetch('/api/models');
       if (response.ok) {
         const data = await response.json();
-        const models = data.models.map((m: any) => m.name);
+        const models = data.models || [];
         if (models.length > 0) {
-          setOllamaModels(models);
+          setLmStudioModels(models);
           // Only change selectedModel if current selection is not available
           if (!models.includes(selectedModel)) {
             setSelectedModel(models[0]);
@@ -77,13 +93,40 @@ function App() {
         }
       }
     } catch (err) {
-      console.error('Failed to fetch Ollama models. Is Ollama running?', err);
+      console.error('Failed to fetch LM Studio models. Is LM Studio running?', err);
+    }
+  };
+
+  const fetchTrends = async (force = false, featuresPerIdea = 4, minIdeas = 5, model = selectedModel) => {
+    setIsLoadingTrends(true);
+    try {
+      const aiSettingsQuery = encodeURIComponent(JSON.stringify(aiModelSettings));
+      const cacheParam = force ? '?force=true' : '';
+      const featuresParam = featuresPerIdea !== 4 ? (cacheParam ? '&' : '?') + `featuresPerIdea=${featuresPerIdea}` : '';
+      const minIdeasParam = minIdeas !== 5 ? (cacheParam || featuresParam ? '&' : '?') + `minIdeas=${minIdeas}` : '';
+      const modelParam = (cacheParam || featuresParam || minIdeasParam ? '&' : '?') + `model=${encodeURIComponent(model)}`;
+      const url = `/api/trends${cacheParam}${featuresParam}${minIdeasParam}${modelParam}&aiSettings=${aiSettingsQuery}`;
+      const response = await fetchWithRetry(url);
+      if (response.ok) {
+        const data = await response.json();
+        setTrends(data.trends);
+        // Handle the ideas from the response
+        const ideas = Array.isArray(data) ? data : data.ideas;
+        if (Array.isArray(ideas) && ideas.length > 0) {
+          setGeneratedIdeas(ideas);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch trends:', error);
+    } finally {
+      setIsLoadingTrends(false);
     }
   };
 
   useEffect(() => {
     fetchModels();
-  }, [ollamaUrl]);
+    // fetchTrends(); // Commented out to prevent automatic crawler start on page load
+  }, []);
 
   // Parse URL for prompt ID on mount
   useEffect(() => {
@@ -226,7 +269,7 @@ function App() {
       const response = await fetchWithRetry('/api/auto-select-stack', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ selections, model: selectedModel })
+        body: JSON.stringify({ selections, model: selectedModel, aiSettings: aiModelSettings })
       });
 
       if (!response.ok) {
@@ -329,22 +372,26 @@ function App() {
   };
 
   const generatedJson = useMemo(() => {
+    // Group selections by category to create a cleaner structure
+    const features = selections.map(s => s.label);
+    const description = selections.length > 0 
+      ? `A platform featuring ${selections.slice(0, 3).map(s => s.label).join(', ')}${selections.length > 3 ? ` and ${selections.length - 3} more features` : ''}.`
+      : "A customizable software project built with modern technologies.";
+
     return JSON.stringify({
       projectName: "Mega Prompt Project",
+      description: description,
       timestamp: new Date().toISOString(),
-      model: selectedModel,
-      requirements: selections.map(s => ({ 
-        type: s.category === 'feature' ? 'feature' : s.category, 
-        value: s.label,
-        description: s.description 
-      })),
+      requirements: {
+        features: features
+      },
       config: {
         theme: "modern",
         responsive: true,
         ai_powered: true
       }
     }, null, 2);
-  }, [selections, selectedModel]);
+  }, [selections]);
 
   const handleGenerate = async () => {
     setIsGenerating(true);
@@ -363,19 +410,13 @@ function App() {
       }).join('\n\n');
 
     try {
-      const response = await fetch(`${ollamaUrl}/api/chat`, {
+      const response = await fetch('http://localhost:1234/api/v1/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: selectedModel,
-          messages: [
-            {
-              role: 'system',
-              content: systemPrompt
-            },
-            {
-              role: 'user',
-              content: `Create a Master "Mega Prompt" for a software project. This Mega Prompt will be used to instruct a high-end AI agent (like Ralph or Goose) to build the system.
+          system_prompt: systemPrompt,
+          input: `Create a Master "Mega Prompt" for a software project. This Mega Prompt will be used to instruct a high-end AI agent (like Ralph or Goose) to build the system.
 
 [TECHNICAL SPECIFICATION JSON]
 Include this exact JSON inside the final Mega Prompt as a <specification> block:
@@ -389,20 +430,38 @@ ${extraGuidance ? `[EXTRA GUIDANCE]\n${extraGuidance}` : ''}
 [OUTPUT REQUIREMENTS]
 1. Generate a comprehensive, Ralph-Loop friendly PRD.md section.
 2. Include a baseline agents.md structure for institutional memory.
-3. Your response must be ONLY the Mega Prompt itself. Start immediately with the title of the project blueprint. No preamble, no "Sure, here is your prompt", no talk about the process. JUST THE PROMPT.`
-            }
-          ],
-          stream: false
+3. Your response must be ONLY the Mega Prompt itself. Start immediately with the title of the project blueprint. No preamble, no "Sure, here is your prompt", no talk about the process. JUST THE PROMPT.`,
+          temperature: aiModelSettings.temperature
         })
       });
 
-      if (!response.ok) throw new Error('Failed to connect to Ollama');
+      if (!response.ok) throw new Error('Failed to connect to LM Studio');
 
       const data = await response.json();
-      let aiResponse = data.message?.content || '';
+      let aiResponse = data;
+
+      // LM Studio might return the response directly or in a different structure
+      if (typeof aiResponse === 'object' && aiResponse.output && Array.isArray(aiResponse.output)) {
+        // Extract content from the output array, prefer non-reasoning content
+        const contentItems = aiResponse.output.filter((item: any) => item.type !== 'reasoning');
+        if (contentItems.length > 0) {
+          aiResponse = contentItems.map((item: any) => item.content).join('');
+        } else {
+          // Fallback to all content if no non-reasoning items
+          aiResponse = aiResponse.output.map((item: any) => item.content).join('');
+        }
+      } else if (typeof aiResponse === 'object' && aiResponse.content) {
+        aiResponse = aiResponse.content;
+      } else if (typeof aiResponse === 'object' && aiResponse.response) {
+        aiResponse = aiResponse.response;
+      } else if (typeof aiResponse === 'object' && aiResponse.message) {
+        aiResponse = aiResponse.message;
+      } else if (typeof aiResponse !== 'string') {
+        aiResponse = JSON.stringify(aiResponse);
+      }
 
       // Clean up response
-      aiResponse = aiResponse.replace(/<think>[\s\S]*?<\/think>/g, ''); // Remove thinking
+      aiResponse = aiResponse.replace(/```[\s\S]*?<\/think>/g, ''); // Remove thinking
       aiResponse = aiResponse.replace(/^(Certainly!|Here's|Sure|Okay)[\s\S]*?\n\n/i, ''); // Remove conversational starters
       aiResponse = aiResponse.trim();
 
@@ -496,12 +555,12 @@ ${extraGuidance ? `### 5. EXTRA GUIDANCE & SPECIFIC REQUIREMENTS\n- ${extraGuida
         <Header
           selectedModel={selectedModel}
           setSelectedModel={setSelectedModel}
-          ollamaModels={ollamaModels}
+          lmStudioModels={lmStudioModels}
           onOpenSettings={() => setIsSettingsOpen(true)}
           onRestart={() => setIsRestartConfirmOpen(true)}
         />
 
-        <Trends trends={null} isLoading={false} onAnalyzeHeadline={setSelectedHeadline} />
+        <Trends trends={trends} isLoading={isLoadingTrends} onAnalyzeHeadline={setSelectedHeadline} />
 
         <main className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           <ProjectBuilder
@@ -517,6 +576,8 @@ ${extraGuidance ? `### 5. EXTRA GUIDANCE & SPECIFIC REQUIREMENTS\n- ${extraGuida
             isAutoSelecting={isAutoSelecting}
             trends={null}
             selectedModel={selectedModel}
+            onFetchTrends={fetchTrends}
+            generatedIdeas={generatedIdeas}
           />
 
           <div className="lg:col-span-5 flex flex-col gap-8">
@@ -548,11 +609,13 @@ ${extraGuidance ? `### 5. EXTRA GUIDANCE & SPECIFIC REQUIREMENTS\n- ${extraGuida
       <SettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
-        ollamaUrl={ollamaUrl}
-        setOllamaUrl={setOllamaUrl}
+        lmStudioUrl={lmStudioUrl}
+        setLmStudioUrl={setLmStudioUrl}
         systemPrompt={systemPrompt}
         setSystemPrompt={setSystemPrompt}
         onRefreshModels={fetchModels}
+        aiModelSettings={aiModelSettings}
+        setAiModelSettings={setAiModelSettings}
       />
 
       <InstantPreview
@@ -560,6 +623,7 @@ ${extraGuidance ? `### 5. EXTRA GUIDANCE & SPECIFIC REQUIREMENTS\n- ${extraGuida
         generatedResult={generatedResult}
         generatedJson={generatedJson}
         selectedModel={selectedModel}
+        aiModelSettings={aiModelSettings}
         isOpen={isInstantPreviewOpen}
         onClose={() => setIsInstantPreviewOpen(false)}
       />

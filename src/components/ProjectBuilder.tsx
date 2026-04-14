@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { ProjectOption, Selection } from '../types'
 import { PROJECT_IDEATION, DEFAULT_MODELS } from '../constants'
@@ -23,6 +23,8 @@ interface ProjectBuilderProps {
         sampleHeadlines: string[]
     } | null;
     selectedModel?: string;
+    onFetchTrends?: (force: boolean, featuresPerIdea: number, minIdeas: number, model: string) => void;
+    generatedIdeas?: any[];
 }
 
 export const ProjectBuilder = ({
@@ -37,7 +39,9 @@ export const ProjectBuilder = ({
     onAutoSelect,
     isAutoSelecting = false,
     trends = null,
-    selectedModel = DEFAULT_MODELS[1] // deepseek-r1:8b
+    selectedModel = DEFAULT_MODELS[1],
+    onFetchTrends,
+    generatedIdeas
 }: ProjectBuilderProps) => {
     const [otherValueScope, setOtherValueScope] = useState('');
     const [isOtherActiveScope, setIsOtherActiveScope] = useState(false);
@@ -49,6 +53,14 @@ export const ProjectBuilder = ({
     const [minIdeasToGenerate, setMinIdeasToGenerate] = useState(5);
     const [selectedIdeaForRationale, setSelectedIdeaForRationale] = useState<any>(null);
     const { useCache, setUseCache } = useCacheCheck();
+
+    // Update ideationStack when generatedIdeas prop changes
+    useEffect(() => {
+        if (generatedIdeas && generatedIdeas.length > 0) {
+            setIdeationStack([{ title: 'Live Trending Tech', options: generatedIdeas }]);
+            setIsSyncing(false);
+        }
+    }, [generatedIdeas]);
 
     // Retry utility for API calls
     const fetchWithRetry = async (url: string, options: RequestInit = {}, retries = 7) => {
@@ -181,6 +193,31 @@ export const ProjectBuilder = ({
         return filtered.length;
     }, [selections]);
 
+    // Check if user has made any tech stack selections (Step 2)
+    const hasTechStackSelections = useMemo(() => {
+        const techCategories = [
+            'Platform', 'Frontend Framework', 'Backend & API', 'Database / Storage',
+            'UI & Styling', 'AI & Machine Learning', 'Design Aesthetics', 'Integrations',
+            'Capabilities & Config', 'Authentication', 'Payments', 'CMS / Content',
+            'Native Features', 'Game Systems', 'Project Type' // Added this
+        ];
+        
+        const result = selections.some(s => {
+            const categoryMatch = techCategories.includes(s.category);
+            const partialMatch = s.category?.includes('Suggestion') ||
+                               s.category?.includes('Backend') ||
+                               s.category?.includes('Frontend') ||
+                               s.category?.includes('Database') ||
+                               s.category?.includes('Platform');
+            
+            console.log(`Checking selection: ${s.label}, category: ${s.category}, match: ${categoryMatch || partialMatch}`);
+            return categoryMatch || partialMatch;
+        });
+        
+        console.log('hasTechStackSelections result:', result);
+        return result;
+    }, [selections]);
+
     return (
         <div className="lg:col-span-7 flex flex-col gap-6">
             {/* 1. Goals & Purpose - Now FIRST */}
@@ -298,8 +335,9 @@ export const ProjectBuilder = ({
                                         ideationStack[ideationStack.length - 1].title !== 'Live Trending Tech';
 
                                     // If we are viewing AI features, only show the features (not other AI ideas)
-                                    // Hide any option that has features (which indicates it's an AI idea, not a feature)
-                                    if (isViewingAIFeatures && opt.features) {
+                                    // Hide any option that has features AND description (which indicates it's an AI idea, not a feature)
+                                    // Features typically don't have descriptions, while AI ideas do
+                                    if (isViewingAIFeatures && opt.features && opt.description) {
                                         return null;
                                     }
 
@@ -436,7 +474,14 @@ export const ProjectBuilder = ({
                                     <motion.button
                                         whileHover={{ scale: 1.02 }}
                                         whileTap={{ scale: 0.98 }}
-                                        onClick={fetchLiveTrends}
+                                        onClick={() => {
+                                            setIsSyncing(true);
+                                            if (onFetchTrends) {
+                                                onFetchTrends(!useCache, featuresPerIdea, minIdeasToGenerate, selectedModel);
+                                            } else {
+                                                fetchLiveTrends();
+                                            }
+                                        }}
                                         disabled={isSyncing}
                                         className={`flex flex-col items-center gap-4 p-8 rounded-3xl transition-all group relative overflow-hidden w-full min-h-[200px] max-h-[200px] min-w-[250px] ${isSyncing
                                             ? 'bg-orange-500/5 border-orange-500/20 cursor-wait'
@@ -556,7 +601,7 @@ export const ProjectBuilder = ({
                             return (
                                 <motion.button
                                     key={opt.id}
-                                    initial={{ opacity: 0, scale: 0.9 }}
+                                    initial={{ opacity: 1, scale: 1 }}
                                     exit={{ opacity: 0, scale: 0.9 }}
                                     whileHover={!isIrrelevant ? { scale: 1.02 } : { scale: 1.01 }}
                                     whileTap={{ scale: 0.98 }}
@@ -564,8 +609,8 @@ export const ProjectBuilder = ({
                                     className={`flex items-center justify-between p-5 rounded-2xl transition-all group border ${selected
                                         ? 'bg-primary/10 border-primary/40 cursor-pointer shadow-[0_0_15px_rgba(139,92,246,0.1)]'
                                         : isIrrelevant
-                                            ? 'glass-card border-white/5 opacity-40 hover:opacity-60 grayscale-[0.5] cursor-pointer'
-                                            : 'glass-card hover:bg-white/[0.06] border-white/5 cursor-pointer hover:border-white/10'
+                                            ? 'glass-card border-white/20 opacity-40 hover:opacity-60 grayscale-[0.5] cursor-pointer'
+                                            : 'bg-white/5 border-white/20 cursor-pointer hover:bg-white/10 hover:border-white/30'
                                         } ${opt.rationale && ideationStack[0].title === 'Live Trending Tech' && ideationStack.length === 1 ? 'ring-1 ring-primary/10' : ''}`}
                                 >
                                     <div className="flex items-center gap-4">
@@ -573,8 +618,8 @@ export const ProjectBuilder = ({
                                             <div className={`p-2.5 rounded-xl transition-colors ${selected
                                                 ? 'bg-primary/20 text-primary'
                                                 : isIrrelevant
-                                                    ? 'bg-white/5 text-muted-foreground'
-                                                    : 'bg-white/5 group-hover:bg-primary/20 text-white'
+                                                    ? 'bg-white/10 text-white/60'
+                                                    : 'bg-white/10 group-hover:bg-primary/20 text-white'
                                                 }`}>
                                                 {opt.icon}
                                             </div>
@@ -582,7 +627,7 @@ export const ProjectBuilder = ({
                                             <div className={`w-2.5 h-2.5 rounded-full shadow-[0_0_10px_rgba(139,92,246,0.5)] ${selected
                                                 ? 'bg-primary'
                                                 : isIrrelevant
-                                                    ? 'bg-muted'
+                                                    ? 'bg-white/40'
                                                     : 'bg-primary'
                                                 }`} />
                                         )}
@@ -591,8 +636,8 @@ export const ProjectBuilder = ({
                                                 <span className={`font-semibold transition-colors ${selected
                                                     ? 'text-primary'
                                                     : isIrrelevant
-                                                        ? 'text-muted-foreground'
-                                                        : 'text-white/90'
+                                                        ? 'text-white/60'
+                                                        : 'text-white'
                                                     }`}>
                                                     {opt.label}
                                                 </span>
@@ -603,7 +648,7 @@ export const ProjectBuilder = ({
                                                 )}
                                             </div>
                                             {opt.features && (
-                                                <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-tighter mt-0.5">
+                                                <span className="text-[10px] text-white/70 font-medium uppercase tracking-tighter mt-0.5">
                                                     {opt.features.length} Options
                                                 </span>
                                             )}
@@ -673,31 +718,40 @@ export const ProjectBuilder = ({
                                 onClick={() => {
                                     console.log('=== Choose For Me Debug ===');
                                     console.log('totalCustomDirectives:', totalCustomDirectives);
+                                    console.log('hasTechStackSelections:', hasTechStackSelections);
+                                    console.log('selections count:', selections.length);
                                     console.log('selections:', selections);
                                     console.log('selections categories:', selections.map(s => s.category));
+                                    console.log('Condition result:', totalCustomDirectives === 0 && !hasTechStackSelections);
                                     console.log('==========================');
 
-                                    if (totalCustomDirectives === 0) {
-                                        // Guide user to step 1 first - scroll to the main buttons and animate them
-                                        const step1Container = document.querySelector('.step-1')?.closest('.glass-card');
-                                        step1Container?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                    // TEMPORARILY FORCE AUTO-SELECT FOR TESTING
+                                    console.log('TESTING - Force calling onAutoSelect...');
+                                    onAutoSelect();
+                                    
+                                    // Original logic (commented out for testing)
+                                    // if (totalCustomDirectives === 0 && !hasTechStackSelections) {
+                                    //     console.log('NO SELECTIONS DETECTED - Guiding user to Step 1');
+                                    //     // Guide user to step 1 first - scroll to the main buttons and animate them
+                                    //     const step1Container = document.querySelector('.step-1')?.closest('.glass-card');
+                                    //     step1Container?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
-                                        // Add pulse animation to the main buttons
-                                        setTimeout(() => {
-                                            const buttons = step1Container?.querySelectorAll('motion-button button');
-                                            buttons?.forEach((btn, index) => {
-                                                setTimeout(() => {
-                                                    btn.classList.add('animate-pulse', 'ring-4', 'ring-orange-400/50');
-                                                    setTimeout(() => {
-                                                        btn.classList.remove('animate-pulse', 'ring-4', 'ring-orange-400/50');
-                                                    }, 2000);
-                                                }, index * 200);
-                                            });
-                                        }, 500);
-                                    } else {
-                                        console.log('Calling onAutoSelect...');
-                                        onAutoSelect();
-                                    }
+                                    //     // Add pulse animation to the main buttons
+                                    //     setTimeout(() => {
+                                    //         const buttons = step1Container?.querySelectorAll('motion-button button');
+                                    //         buttons?.forEach((btn, index) => {
+                                    //             setTimeout(() => {
+                                    //                 btn.classList.add('animate-pulse', 'ring-4', 'ring-orange-400/50');
+                                    //                 setTimeout(() => {
+                                    //                     btn.classList.remove('animate-pulse', 'ring-4', 'ring-orange-400/50');
+                                    //                 }, 2000);
+                                    //             }, index * 200);
+                                    //         });
+                                    //     }, 500);
+                                    // } else {
+                                    //     console.log('SELECTIONS DETECTED - Calling onAutoSelect...');
+                                    //     onAutoSelect();
+                                    // }
                                 }}
                                 disabled={isAutoSelecting}
                                 className={`flex items-center justify-between p-5 rounded-2xl transition-all group border ${isAutoSelecting

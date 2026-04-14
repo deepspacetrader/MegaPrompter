@@ -17,8 +17,8 @@ Expect users to make web apps, mobile apps, desktop software, games, tools, etc.
 
 ## Prerequisites
 - Node.js (v18 or higher)
-- Ollama installed and running locally (for Generate Ideas With AI feature)
-- `deepseek-r1:8b` model installed in Ollama
+- LM Studio installed and running locally (for Generate Ideas With AI feature)
+- A model loaded in LM Studio (e.g., google/gemma-4-e4b)
 
 ## Installation
 ```bash
@@ -34,13 +34,13 @@ npm run dev
 ```
 
 ### Option 2: Full Application (Recommended)
-To enable the Generate Ideas With AI feature that synthesizes live trends into project ideas:
+To enable the Generate Ideas With AI feature that synthesizes RSS feed trends into project ideas:
 
 1. **Start the ideas server** (in a separate terminal):
 ```bash
-npm run start-ideas-server
+npm run server
 ```
-This starts the backend server on port 3001 that fetches trends and generates AI-powered project ideas.
+This starts the backend server on port 3001 that fetches RSS feeds and generates AI-powered project ideas.
 
 2. **Start the frontend** (in another terminal):
 ```bash
@@ -51,12 +51,12 @@ The frontend will run on port 5173 (or next available port) and connect to the i
 
 ## Generate Ideas With AI Feature
 The "Generate Ideas With AI" button requires the ideas server to be running. It:
-- Fetches trending topics from TechCrunch, The Verge, Wired, HackerNews, GitHub, and X/Twitter
-- Uses local Ollama (`deepseek-r1:8b` model) to synthesize trends into project ideas
-- Caches results for 6 hours to improve performance
+- Fetches trending topics from RSS feeds (TechCrunch, The Verge, Wired, BBC Technology, MacRumors)
+- Uses local LM Studio to synthesize trends into project ideas
+- Caches results indefinitely to improve performance
 - Can be toggled between cached (safe) and live data modes
 
-If you see "Failed to sync trends: TypeError: Failed to fetch" error, make sure the ideas server is running with `npm run start-ideas-server`.
+If you see "Failed to sync trends: TypeError: Failed to fetch" error, make sure the ideas server is running with `npm run server` and LM Studio is running on port 1234.
 
 # Tech Stack
 - TypeScript
@@ -81,5 +81,5 @@ Prompt output UUID is used to access the specific prompt. All prompts are stored
 Integration with https://json-render.dev/ (https://github.com/vercel-labs/json-render) to render the json output of the prompts instantly.
 
 # Constraints
-- Uses locally hosted Ollama models for Ai generation of prompts as the user defined selections narrows down the scope the project with predefined details and constraints added to the "mega prompt" which is then sent to the Ollama Ai model to generate the final prompt.
+- Uses locally hosted LM Studio models for AI generation of prompts as the user defined selections narrows down the scope the project with predefined details and constraints added to the "mega prompt" which is then sent to the LM Studio AI model to generate the final prompt.
 - Uses free open source software only, no paid services at all.

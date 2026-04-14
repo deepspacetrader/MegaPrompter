@@ -1,6 +1,5 @@
 import express from 'express';
 import cors from 'cors';
-import { PlaywrightCrawler, SessionPool } from 'crawlee';
 import axios from 'axios';
 import RSSParser from 'rss-parser';
 import fs from 'fs';
@@ -11,8 +10,6 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const rootDir = path.join(__dirname, '..');
 
-// Ensure Crawlee storage is outside the server directory to prevent nodemon restart loop
-process.env.CRAWLEE_STORAGE_DIR = path.join(rootDir, 'storage');
 
 const app = express();
 const parser = new RSSParser();
@@ -24,25 +21,18 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 const PORT = 3001;
-const OLLAMA_URL = 'http://localhost:11434';
-const DEFAULT_MODEL = 'deepseek-r1:8b';
-// const DEFAULT_MODEL = 'qwen3:8b';
+const LM_STUDIO_URL = 'http://localhost:1234';
+const DEFAULT_MODEL = 'google/gemma-4-e4b';
 const CACHE_FILE = path.join(__dirname, '..', 'idea_cache.json');
 const MEGA_PROMPTS_DIR = path.join(__dirname, '..', 'storage', 'mega_prompts');
-const CACHE_TTL = 1000 * 60 * 60 * 6; // 6 hours
-
-// Web scraping targets for additional trend data
-const SCRAPING_TARGETS = [
-    { name: 'Hacker News', url: 'https://news.ycombinator.com', selector: '.titleline > a' },
-    { name: 'Product Hunt', url: 'https://www.producthunt.com', selector: '[data-test="post-name"]' },
-    { name: 'GitHub Trending', url: 'https://github.com/trending', selector: 'h2 a' }
-];
-
+const CACHE_TTL = Infinity; // Cache never expires
 
 const FEEDS = [
     { name: 'TechCrunch', url: 'https://techcrunch.com/feed/' },
     { name: 'The Verge', url: 'https://www.theverge.com/rss/index.xml' },
-    { name: 'Wired', url: 'https://www.wired.com/feed/rss' }
+    { name: 'Wired', url: 'https://www.wired.com/feed/rss' },
+    { name: 'BBC Technology', url: 'https://feeds.bbci.co.uk/news/technology/rss.xml' },
+    { name: 'MacRumors', url: 'https://feeds.macrumors.com/public/rss/all.rss' }
 ];
 
 // Helper functions for prompt storage
@@ -52,236 +42,209 @@ function ensureMegaPromptsDir() {
     }
 }
 
-// Web scraping function with built-in caching and protection
-async function scrapeTrendingTopics() {
-    const headlines = [];
-
-    // Create session pool for human-like behavior
-    const sessionPool = new SessionPool({
-        maxPoolSize: 5,
-        sessionOptions: {
-            maxUsageCount: 3, // Rotate sessions after 3 uses
-            sessionPoolOptions: {
-                persistStateKeyValueStoreId: 'scraping-sessions',
-            },
-        },
-    });
-
-    // Configure crawler with built-in protections
-    const crawler = new PlaywrightCrawler({
-        headless: true,
-        maxRequestRetries: 2,
-        requestHandlerTimeoutSecs: 30,
-        navigationTimeoutSecs: 30,
-        maxRequestsPerCrawl: SCRAPING_TARGETS.length,
-        launchContext: {
-            launchOptions: {
-                headless: true,
-                args: [
-                    '--no-sandbox',
-                    '--disable-setuid-sandbox',
-                    '--disable-dev-shm-usage',
-                    '--disable-accelerated-2d-canvas',
-                    '--no-first-run',
-                    '--no-zygote',
-                    '--disable-gpu'
-                ]
-            }
-        },
-        preNavigationHooks: [
-            async ({ request, session }) => {
-                // Rotate user agents
-                const userAgents = [
-                    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-                ];
-                request.headers = {
-                    ...request.headers,
-                    'User-Agent': userAgents[Math.floor(Math.random() * userAgents.length)],
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                    'Accept-Language': 'en-US,en;q=0.5',
-                    'Accept-Encoding': 'gzip, deflate, br',
-                    'DNT': '1',
-                    'Connection': 'keep-alive',
-                    'Upgrade-Insecure-Requests': '1',
-                };
-            },
-        ],
-        requestHandler: async ({ request, page, sendRequest, log }) => {
-            const target = SCRAPING_TARGETS.find(t => t.url === request.url);
-            if (!target) return;
-
-            try {
-                log.info(`Scraping ${target.name}...`);
-
-                // Wait for content to load
-                await page.waitForLoadState('domcontentloaded');
-
-                // Extract headlines
-                const elements = await page.locator(target.selector).all();
-                const texts = await Promise.all(
-                    elements.slice(0, 5).map(el => el.textContent())
-                );
-
-                const headlinesFromSite = texts
-                    .filter(text => text && text.trim().length > 0)
-                    .map(text => `[${target.name}] ${text.trim()}`);
-
-                headlines.push(...headlinesFromSite);
-                log.info(`Found ${headlinesFromSite.length} headlines from ${target.name}`);
-
-                // Add delay between requests to be respectful
-                await page.waitForTimeout(Math.random() * 2000 + 1000); // 1-3 second random delay
-
-            } catch (error) {
-                log.error(`Error scraping ${target.name}: ${error.message}`);
-            }
-        },
-    });
-
-    // Add targets to crawler
-    await crawler.addRequests(SCRAPING_TARGETS.map(t => t.url));
-
-    // Run crawler
-    console.log('Crawler starting...');
-    await crawler.run();
-    console.log('Crawler finished successfully.');
-
-    return headlines;
-}
-
-async function generateIdeasFromTrends(trends, featuresPerIdea = 5, model = DEFAULT_MODEL) {
+async function generateIdeasFromTrends(trends, featuresPerIdea, minIdeas, model = DEFAULT_MODEL, aiSettings = {}) {
     if (trends.length === 0) return [];
 
-    const prompt = `
-    ### GENERATE IDEAS WITH AI MODE ###
-    You are a visionary Product Architect. 
-    
-    RAW SIGNALS:
-    ${trends.join('\n')}
+    const maxRetries = 2;
+    let lastError = null;
+    let allIdeas = [];
 
-    ### MISSION ###
-    1. Study the RAW SIGNALS.
-    2. Synthesize them into specific, high-concept software project ideas that are actionable, innovative, and market-ready. They should solve a problem or fill a gap in the market by creating value for the potential users by creatively solving their problems.
-    3. Ideas should software focused either as web or desktop applications or digital services. Should not be a physical product. Do not rely upon non existing technology such as force fields. Nothing sci-fi.
-    4. CRITICAL: NEVER use these forbidden words: "Product Name", "AI App", "Niche Implementation", "Creative Product", "Strategic Feature", "unique-slug", "s1", "s2".
-    5. Provide unique, bold, original industry-specific names (e.g., "Vector Power", "Quant Flow", "Bio Nexus") and try to make them self explanatory.
-    
-    ### OUTPUT FORMAT (JSON ONLY) ###
-    {
-      "ideas": [
-        {
-          "id": "meaningful-slug-1", 
-          "label": "BOLD PRODUCT NAME",
-          "description": "Brief one-sentence description",
-          "rationale": "Explain which RAW SIGNALS influenced this idea and why (e.g., 'Inspired by the rise of AI agents and the need for better vector databases...')",
-          "features": [
-            {"id": "feature-slug-1", "label": "SPECIFIC HIGH-LEVEL FEATURE"},
-            {"id": "feature-slug-2", "label": "SPECIFIC HIGH-LEVEL FEATURE"}
-          ]
-        }
-      ]
-    }
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            const ideas = await attemptGenerateIdeasBatched(trends, featuresPerIdea, minIdeas, model, aiSettings, attempt);
+            allIdeas.push(...ideas);
 
-    Generate exactly ${featuresPerIdea} features per idea. Focus on quality - only include features that are essential and distinct. If ${featuresPerIdea} is too many for a simple idea, make the features more granular. If ${featuresPerIdea} is too few for a complex idea, make the features more comprehensive.    
-    
-    Response must be ONLY JSON. No preamble. NO PLACEHOLDERS.
-    `;
-
-    try {
-        console.log(`Generating ideas with Ai now in progress using: ${model}...`);
-        const response = await axios.post(`${OLLAMA_URL}/api/generate`, {
-            model: model,
-            prompt: prompt,
-            stream: false,
-            think: true,
-            format: {
-                type: 'object',
-                properties: {
-                    ideas: {
-                        type: 'array',
-                        items: {
-                            type: 'object',
-                            properties: {
-                                id: { type: 'string' },
-                                label: { type: 'string' },
-                                description: { type: 'string' },
-                                rationale: { type: 'string' },
-                                features: {
-                                    type: 'array',
-                                    items: {
-                                        type: 'object',
-                                        properties: {
-                                            id: { type: 'string' },
-                                            label: { type: 'string' }
-                                        }
-                                    }
-                                }
-                            },
-                            required: ['id', 'label', 'description', 'rationale', 'features']
-                        }
-                    }
-                },
-                required: ['ideas']
+            if (allIdeas.length >= minIdeas) {
+                console.log(`Successfully generated ${allIdeas.length} ideas on attempt ${attempt}`);
+                return allIdeas.slice(0, minIdeas);
+            } else {
+                console.warn(`Attempt ${attempt}: Generated ${ideas.length} ideas (total: ${allIdeas.length}/${minIdeas})`);
+                if (attempt < maxRetries) {
+                    console.log(`Retrying... (${attempt}/${maxRetries})`);
+                    continue;
+                }
             }
-        }, {
-            timeout: 120000, // 2 minute timeout
-            maxContentLength: 50 * 1024 * 1024, // 50MB max response size
-            maxBodyLength: 50 * 1024 * 1024 // 50MB max request size
-        });
-
-        if (response.data.thinking) {
-            console.log('\x1b[36m%s\x1b[0m', '--- THINKING ---');
-            console.log(response.data.thinking);
-            console.log('\x1b[36m%s\x1b[0m', '-------------------------');
+        } catch (error) {
+            lastError = error;
+            console.error(`Attempt ${attempt} failed:`, error.message);
+            if (attempt < maxRetries) {
+                console.log(`Retrying... (${attempt}/${maxRetries})`);
+                await new Promise(resolve => setTimeout(resolve, 3000 * attempt));
+            }
         }
-
-        let rawResponse = response.data.response;
-        // Clean up <think> tags if present in the main response
-        rawResponse = rawResponse.replace(/<think>[\s\S]*?<\/think>/g, '');
-        // Clean up markdown code blocks if present
-        rawResponse = rawResponse.replace(/```json/g, '').replace(/```/g, '');
-        // Trim whitespace
-        rawResponse = rawResponse.trim();
-
-        console.log('Sanitized AI Response:', rawResponse.substring(0, 100) + '...');
-
-        const parsed = JSON.parse(rawResponse);
-        return Array.isArray(parsed.ideas) ? parsed.ideas : [];
-    } catch (error) {
-        console.error('Generating Ideas with Ai failed:', error.message);
-        if (error.code === 'ECONNRESET') {
-            console.error('Connection to Ollama was reset. The model might be overloaded or the request timed out.');
-        } else if (error.code === 'ECONNREFUSED') {
-            console.error('Could not connect to Ollama. Is Ollama running?');
-        }
-        return [];
     }
+
+    // Return whatever ideas were generated instead of empty array
+    if (allIdeas.length > 0) {
+        console.warn(`Generated ${allIdeas.length} ideas (below target of ${minIdeas}), returning partial results`);
+        return allIdeas;
+    }
+
+    console.error(`All ${maxRetries} attempts failed. Returning empty array.`);
+    if (lastError) {
+        throw lastError;
+    }
+    return [];
+}
+
+async function attemptGenerateIdeasBatched(trends, featuresPerIdea, minIdeas, model, aiSettings, attempt) {
+    // Strategy: Generate in smaller batches to avoid overwhelming the AI
+    const batchSize = Math.min(3, minIdeas); // Generate max 3 ideas at a time
+    const batches = Math.ceil(minIdeas / batchSize);
+    const allIdeas = [];
+
+    console.log(`Attempt ${attempt}: Generating ${minIdeas} ideas in ${batches} batches of ${batchSize} each`);
+
+    for (let batch = 0; batch < batches; batch++) {
+        const ideasNeeded = Math.min(batchSize, minIdeas - allIdeas.length);
+        if (ideasNeeded <= 0) break;
+
+        // Simplified prompt for better reliability
+        const prompt = `Generate exactly ${ideasNeeded} different software project ideas as a JSON array.
+Each idea needs: id, label, description, rationale, and exactly ${featuresPerIdea} features.
+CRITICAL: Each idea MUST have a UNIQUE id. Use sequential numbering starting from ${allIdeas.length + 1}.
+Format: [{"id":"idea-${allIdeas.length + 1}","label":"Name1","description":"Desc1","rationale":"Why1","features":[{"id":"f1","label":"Feature 1"}]}, {"id":"idea-${allIdeas.length + 2}","label":"Name2","description":"Desc2","rationale":"Why2","features":[{"id":"f1","label":"Feature 1"}]}]
+
+CRITICAL: ONLY generate SOFTWARE and WEB APPLICATION ideas. NO hardware, physical devices, chips, or embedded systems.
+Focus on: web apps, mobile apps, SaaS platforms, online tools, digital services, cloud-based solutions.
+
+Market signals: ${trends.slice(0, 10).join(' | ')}
+Return ONLY the JSON array. No explanations.`;
+
+        console.log(`Batch ${batch + 1}: Requesting ${ideasNeeded} ideas with simplified prompt...`);
+
+        const requestOptions = {
+            model: model,
+            system_prompt: "You are a helpful AI assistant that responds with valid JSON.",
+            input: prompt,
+            temperature: aiSettings.temperature || 0.1
+        };
+
+        try {
+            const response = await axios.post(`${LM_STUDIO_URL}/api/v1/chat`, requestOptions, {
+                timeout: 90000, // 90 second timeout
+                maxContentLength: 50 * 1024 * 1024,
+                maxBodyLength: 50 * 1024 * 1024
+            });
+
+            let rawResponse = response.data;
+            // LM Studio returns format: {"model_instance_id":"...","output":[{"type":"reasoning","content":"..."}, {"type":"response","content":"..."}]}
+            if (typeof rawResponse === 'object' && rawResponse.output && Array.isArray(rawResponse.output)) {
+                // Extract content from the output array, prefer non-reasoning content
+                const contentItems = rawResponse.output.filter(item => item.type !== 'reasoning');
+                if (contentItems.length > 0) {
+                    rawResponse = contentItems.map(item => item.content).join('');
+                } else {
+                    // Fallback to all content if no non-reasoning items
+                    rawResponse = rawResponse.output.map(item => item.content).join('');
+                }
+            } else if (typeof rawResponse === 'object' && rawResponse.content) {
+                rawResponse = rawResponse.content;
+            } else if (typeof rawResponse === 'object' && rawResponse.response) {
+                rawResponse = rawResponse.response;
+            } else if (typeof rawResponse === 'object' && rawResponse.message) {
+                rawResponse = rawResponse.message;
+            } else if (typeof rawResponse !== 'string') {
+                rawResponse = JSON.stringify(rawResponse);
+            }
+            
+            rawResponse = rawResponse.replace(/```json/g, '').replace(/```/g, '');
+            rawResponse = rawResponse.trim();
+
+            console.log(`Batch ${batch + 1} response:`, rawResponse.substring(0, 200) + '...');
+
+            const parsed = JSON.parse(rawResponse);
+            let ideas = [];
+
+            if (Array.isArray(parsed)) {
+                ideas = parsed;
+            } else if (parsed.ideas && Array.isArray(parsed.ideas)) {
+                ideas = parsed.ideas;
+            } else if (parsed.id && parsed.label && parsed.features) {
+                ideas = [parsed];
+            }
+
+            console.log(`Batch ${batch + 1} parsed ${ideas.length} ideas`);
+            allIdeas.push(...ideas);
+
+            // Delay between batches
+            if (batch < batches - 1) {
+                await new Promise(resolve => setTimeout(resolve, 2000));
+            }
+        } catch (error) {
+            console.error(`Batch ${batch + 1} failed:`, error.message);
+            console.error('Full error details:', error);
+            if (error.response) {
+                console.error('Response data:', error.response.data);
+                console.error('Response status:', error.response.status);
+            }
+            // Continue with next batch even if one fails
+        }
+    }
+
+    console.log(`Total ideas generated: ${allIdeas.length} (requested: ${minIdeas})`);
+
+    // Post-process to ensure unique IDs and remove duplicates based on content
+    const uniqueIdeas = [];
+    const seenContent = new Set();
+    let idCounter = 1;
+
+    for (const idea of allIdeas) {
+        // Create content signature for deduplication (label + description)
+        const contentSignature = `${idea.label?.toLowerCase().trim() || ''}-${idea.description?.toLowerCase().trim() || ''}`;
+
+        // Skip if we've seen this content before
+        if (seenContent.has(contentSignature)) {
+            console.log(`Skipping duplicate idea: ${idea.label}`);
+            continue;
+        }
+
+        seenContent.add(contentSignature);
+        uniqueIdeas.push({
+            ...idea,
+            id: `idea-${idCounter++}`
+        });
+    }
+
+    console.log(`After content-based deduplication: ${uniqueIdeas.length} unique ideas (removed ${allIdeas.length - uniqueIdeas.length} duplicates)`);
+    return uniqueIdeas.slice(0, minIdeas);
 }
 
 app.get('/api/trends', async (req, res) => {
     console.log('--- Incoming Request: GET /api/trends ---');
-    // Extract featuresPerIdea and model from query params
+    // Extract featuresPerIdea, minIdeas, model, and AI settings from query params
     const featuresPerIdea = parseInt(req.query.featuresPerIdea) || 4;
+    const minIdeas = parseInt(req.query.minIdeas) || 5;
     const model = req.query.model || DEFAULT_MODEL;
+
+    // Parse AI settings from query
+    let aiSettings = {};
+    try {
+        if (req.query.aiSettings) {
+            aiSettings = JSON.parse(req.query.aiSettings);
+        }
+    } catch (e) {
+        console.warn('Invalid AI settings in query, using defaults:', e.message);
+    }
 
     // 0. Check Cache
     try {
-        if (fs.existsSync(CACHE_FILE)) {
+        console.log('Checking cache file:', CACHE_FILE);
+        if (fs.existsSync(CACHE_FILE) && req.query.force !== 'true') {
+            console.log('Serving ideas from cache (force =', req.query.force, ')...');
             const cacheData = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf-8'));
-            const now = Date.now();
-            if (now - cacheData.timestamp < CACHE_TTL && req.query.force !== 'true') {
-                console.log('Serving ideas from cache...');
-                return res.json({
-                    ideas: cacheData.ideas,
-                    trends: cacheData.trends || {
-                        totalSignals: 0,
-                        sources: [],
-                        sampleHeadlines: []
-                    }
-                });
-            }
+            return res.json({
+                ideas: cacheData.ideas,
+                trends: cacheData.trends || {
+                    totalSignals: 0,
+                    sources: [],
+                    sampleHeadlines: []
+                }
+            });
+        } else if (req.query.force === 'true') {
+            console.log('Force refresh requested - bypassing cache');
+        } else {
+            console.log('No cache file found - will crawl');
         }
     } catch (e) {
         console.error('Cache read error:', e.message);
@@ -301,21 +264,11 @@ app.get('/api/trends', async (req, res) => {
         }
     }
 
-    // 2. Web scraping with built-in protection and caching
-    console.log('Scraping trending topics with protection...');
-    try {
-        const scrapedHeadlines = await scrapeTrendingTopics();
-        headlines.push(...scrapedHeadlines);
-        console.log(`Successfully scraped ${scrapedHeadlines.length} additional headlines`);
-    } catch (error) {
-        console.error('Web scraping failed, falling back to RSS only:', error.message);
-        console.log('Using RSS feeds only as fallback...');
-    }
 
-    console.log(`Gathered ${headlines.length} signals. Transmuting into ideas with ${featuresPerIdea} features per idea...`);
+    console.log(`Gathered ${headlines.length} signals. Generating ${minIdeas} ideas with ${featuresPerIdea} features per idea...`);
 
     try {
-        const ideas = await generateIdeasFromTrends(headlines, featuresPerIdea, model);
+        const ideas = await generateIdeasFromTrends(headlines, featuresPerIdea, minIdeas, model, aiSettings);
 
         // 4. Save to Cache
         if (ideas.length > 0) {
@@ -325,10 +278,7 @@ app.get('/api/trends', async (req, res) => {
                     ideas: ideas,
                     trends: {
                         totalSignals: headlines.length,
-                        sources: [
-                            ...FEEDS.map(f => f.name),
-                            ...SCRAPING_TARGETS.map(t => t.name)
-                        ],
+                        sources: FEEDS.map(f => f.name),
                         sampleHeadlines: headlines.slice(0, 10)
                     }
                 }, null, 2));
@@ -342,10 +292,7 @@ app.get('/api/trends', async (req, res) => {
             ideas: ideas,
             trends: {
                 totalSignals: headlines.length,
-                sources: [
-                    ...FEEDS.map(f => f.name),
-                    ...SCRAPING_TARGETS.map(t => t.name)
-                ],
+                sources: FEEDS.map(f => f.name),
                 sampleHeadlines: headlines.slice(0, 10)
             }
         });
@@ -424,7 +371,7 @@ app.get('/api/prompts/:id', (req, res) => {
 // AI-powered tech stack selection endpoint
 app.post('/api/auto-select-stack', async (req, res) => {
     try {
-        const { selections, model } = req.body;
+        const { selections, model, aiSettings } = req.body;
 
         if (!selections || !Array.isArray(selections)) {
             return res.status(400).json({ error: 'Selections array is required' });
@@ -451,7 +398,7 @@ app.post('/api/auto-select-stack', async (req, res) => {
         - Backend: node, hono, nest, python_fastapi, go_chi, trpc, graphql
         - Database: supabase, firebase, postgresql, mongodb, mysql, redis
         - UI: tailwind, shadcn, chakra, radix, framer, lucide
-        - AI/ML: openai, anthropic, ollama, langchain, dalle, midjourney, elevenlabs, whisper, vision, sentiment, pinecone, weaviate, chroma
+        - AI/ML: openai, anthropic, lm_studio, langchain, dalle, midjourney, elevenlabs, whisper, vision, sentiment, pinecone, weaviate, chroma
         - Mobile: rn, flutter, swiftui, expo, push, camera, maps, biometrics
         - Game: unity, godot, phaser, unreal, multiplayer, physics, save_system, inventory
         - Design: minimal, brutalist, glassmorphism, material, geometric, monochrome
@@ -481,39 +428,42 @@ app.post('/api/auto-select-stack', async (req, res) => {
 
         console.log('Getting AI tech stack recommendations...');
 
-        const response = await axios.post(`${OLLAMA_URL}/api/generate`, {
+        // Prepare request options with AI settings
+        const requestOptions = {
             model: model || DEFAULT_MODEL,
-            prompt: prompt,
-            stream: false,
-            format: {
-                type: 'array',
-                items: {
-                    type: 'object',
-                    properties: {
-                        id: { type: 'string' },
-                        category: { type: 'string' },
-                        label: { type: 'string' }
-                    },
-                    required: ['id', 'category', 'label']
-                }
-            }
-        }, {
+            system_prompt: "You are a helpful AI assistant that responds with valid JSON arrays.",
+            input: prompt,
+            temperature: aiSettings?.temperature || 0.1
+        };
+
+        const response = await axios.post(`${LM_STUDIO_URL}/api/v1/chat`, requestOptions, {
             timeout: 120000, // 2 minute timeout
             maxContentLength: 50 * 1024 * 1024, // 50MB max response size
             maxBodyLength: 50 * 1024 * 1024 // 50MB max request size
         });
 
-        if (response.data.thinking) {
-            console.log('\x1b[36m%s\x1b[0m', '--- AI THINKING ---');
-            console.log(response.data.thinking);
-            console.log('\x1b[36m%s\x1b[0m', '---------------------');
-        }
-
         let recommendations;
         try {
-            let rawResponse = response.data.response;
-            // Clean up <think> tags if present in the main response
-            rawResponse = rawResponse.replace(/<think>[\s\S]*?<\/think>/g, '');
+            let rawResponse = response.data;
+            // LM Studio returns format: {"model_instance_id":"...","output":[{"type":"reasoning","content":"..."}, {"type":"response","content":"..."}]}
+            if (typeof rawResponse === 'object' && rawResponse.output && Array.isArray(rawResponse.output)) {
+                // Extract content from the output array, prefer non-reasoning content
+                const contentItems = rawResponse.output.filter(item => item.type !== 'reasoning');
+                if (contentItems.length > 0) {
+                    rawResponse = contentItems.map(item => item.content).join('');
+                } else {
+                    // Fallback to all content if no non-reasoning items
+                    rawResponse = rawResponse.output.map(item => item.content).join('');
+                }
+            } else if (typeof rawResponse === 'object' && rawResponse.content) {
+                rawResponse = rawResponse.content;
+            } else if (typeof rawResponse === 'object' && rawResponse.response) {
+                rawResponse = rawResponse.response;
+            } else if (typeof rawResponse === 'object' && rawResponse.message) {
+                rawResponse = rawResponse.message;
+            } else if (typeof rawResponse !== 'string') {
+                rawResponse = JSON.stringify(rawResponse);
+            }
             // Clean up markdown code blocks if present
             rawResponse = rawResponse.replace(/```json/g, '').replace(/```/g, '');
             // Trim whitespace
@@ -539,9 +489,9 @@ app.post('/api/auto-select-stack', async (req, res) => {
     } catch (error) {
         console.error('AI tech stack selection failed:', error.message);
         if (error.code === 'ECONNRESET') {
-            console.error('Connection to Ollama was reset. The model might be overloaded or the request timed out.');
+            console.error('Connection to LM Studio was reset. The model might be overloaded or the request timed out.');
         } else if (error.code === 'ECONNREFUSED') {
-            console.error('Could not connect to Ollama. Is Ollama running?');
+            console.error('Could not connect to LM Studio. Is LM Studio running?');
         }
 
         // Fallback recommendations
@@ -560,7 +510,9 @@ app.post('/api/auto-select-stack', async (req, res) => {
 
 app.post('/api/ui-preview', async (req, res) => {
     try {
-        const { megaPrompt, model } = req.body || {};
+        const { megaPrompt, model, aiSettings } = req.body || {};
+
+        console.log('[UI Preview] Request received:', { model: model || DEFAULT_MODEL, megaPromptLength: megaPrompt?.length });
 
         if (!megaPrompt || typeof megaPrompt !== 'string') {
             return res.status(400).json({ error: 'megaPrompt (string) is required' });
@@ -612,37 +564,90 @@ MEGA PROMPT:
 ${megaPrompt}
         `.trim();
 
-        const response = await axios.post(`${OLLAMA_URL}/api/generate`, {
+        const response = await axios.post(`${LM_STUDIO_URL}/api/v1/chat`, {
             model: model || DEFAULT_MODEL,
-            prompt: uiPrompt,
-            stream: false,
-            format: {
-                type: 'object',
-                properties: {
-                    root: { type: 'string' },
-                    elements: { type: 'object' }
-                },
-                required: ['root', 'elements']
-            }
+            system_prompt: "You are a helpful AI assistant that responds with valid JSON objects.",
+            input: uiPrompt,
+            temperature: aiSettings?.temperature || 0.1
         }, {
             timeout: 120000,
             maxContentLength: 50 * 1024 * 1024,
             maxBodyLength: 50 * 1024 * 1024
         });
 
-        let rawResponse = response.data.response;
-        rawResponse = rawResponse.replace(/<think>[\s\S]*?<\/think>/g, '');
+        console.log('[UI Preview] LM Studio response status:', response.status);
+        let rawResponse = response.data;
+        console.log('[UI Preview] Raw response type:', typeof rawResponse);
+        console.log('[UI Preview] Raw response keys:', typeof rawResponse === 'object' ? Object.keys(rawResponse) : 'N/A');
+        // LM Studio returns format: {"model_instance_id":"...","output":[{"type":"reasoning","content":"..."}, {"type":"response","content":"..."}]}
+        if (typeof rawResponse === 'object' && rawResponse.output && Array.isArray(rawResponse.output)) {
+            // Extract content from the output array, prefer non-reasoning content
+            const contentItems = rawResponse.output.filter(item => item.type !== 'reasoning');
+            if (contentItems.length > 0) {
+                rawResponse = contentItems.map(item => item.content).join('');
+            } else {
+                // Fallback to all content if no non-reasoning items
+                rawResponse = rawResponse.output.map(item => item.content).join('');
+            }
+        } else if (typeof rawResponse === 'object' && rawResponse.content) {
+            rawResponse = rawResponse.content;
+        } else if (typeof rawResponse === 'object' && rawResponse.response) {
+            rawResponse = rawResponse.response;
+        } else if (typeof rawResponse === 'object' && rawResponse.message) {
+            rawResponse = rawResponse.message;
+        } else if (typeof rawResponse !== 'string') {
+            rawResponse = JSON.stringify(rawResponse);
+        }
         rawResponse = rawResponse.replace(/```json/g, '').replace(/```/g, '');
         rawResponse = rawResponse.trim();
+        console.log('[UI Preview] Parsed response length:', rawResponse.length);
+        console.log('[UI Preview] Parsed response preview:', rawResponse.substring(0, 500));
+        console.log('[UI Preview] Full parsed response:', rawResponse);
 
         try {
             const preview = JSON.parse(rawResponse);
+            console.log('[UI Preview] JSON parsed successfully');
 
             const toGraph = (tree) => {
                 if (!tree || typeof tree !== 'object') return null;
 
                 if (typeof tree.root === 'string' && tree.elements && typeof tree.elements === 'object') {
-                    return tree;
+                    // The tree already has graph format, but we need to normalize it
+                    // Convert any nested object children to string references
+                    const elements = { ...tree.elements };
+                    let counter = Object.keys(elements).length;
+
+                    const normalizeElement = (key) => {
+                        const el = elements[key];
+                        if (!el) return;
+
+                        if (Array.isArray(el.children) && el.children.length > 0) {
+                            // Check if children are objects (need normalization) or strings (already normalized)
+                            if (typeof el.children[0] === 'object') {
+                                // Convert nested object children to string references
+                                const childKeys = el.children.map((child) => {
+                                    counter += 1;
+                                    const childKey = child.key || `el_${counter}`;
+                                    elements[childKey] = {
+                                        key: childKey,
+                                        type: child.type,
+                                        props: (child.props && typeof child.props === 'object') ? child.props : {}
+                                    };
+                                    // Recursively normalize the child
+                                    normalizeElement(childKey);
+                                    return childKey;
+                                });
+                                el.children = childKeys;
+                            }
+                        }
+                    };
+
+                    // Normalize all elements
+                    for (const key of Object.keys(elements)) {
+                        normalizeElement(key);
+                    }
+
+                    return { root: tree.root, elements };
                 }
 
                 if (typeof tree.type !== 'string') return null;
@@ -828,6 +833,60 @@ ${megaPrompt}
                 }
             }
         });
+    }
+});
+
+// Get LM Studio models endpoint
+app.get('/api/models', async (req, res) => {
+    try {
+        const url = `${LM_STUDIO_URL}/api/v1/models`;
+        console.log('[LM Studio] Fetching models from:', url);
+        const response = await axios.get(url);
+        console.log('[LM Studio] Response status:', response.status, response.statusText);
+
+        if (!response.ok && response.status !== 200) {
+            console.log('[LM Studio] Response not OK, returning empty');
+            return res.json({ models: [] });
+        }
+
+        const data = response.data;
+        console.log('[LM Studio] Raw response data:', data);
+
+        // LM Studio returns {models: [...]}
+        if (Array.isArray(data.models)) {
+            const models = data.models
+                .filter(m => m.type === 'llm') // Only include LLM models, not embeddings
+                .map(m => m.key || m.id || m.model || m.name || '')
+                .filter(Boolean);
+            console.log('[LM Studio] Parsed models:', models);
+            return res.json({ models });
+        }
+
+        // Fallback for other formats
+        if (Array.isArray(data)) {
+            const models = data
+                .filter(m => m.type !== 'embedding') // Exclude embedding models
+                .map(m => m.key || m.id || m.model || m.name || '')
+                .filter(Boolean);
+            console.log('[LM Studio] Parsed models (array):', models);
+            return res.json({ models });
+        }
+
+        if (data.data && Array.isArray(data.data)) {
+            const models = data.data
+                .filter(m => m.type !== 'embedding')
+                .map(m => m.key || m.id || m.model || m.name || '')
+                .filter(Boolean);
+            console.log('[LM Studio] Parsed models from data.data:', models);
+            return res.json({ models });
+        }
+
+        console.log('[LM Studio] No models found in response');
+        return res.json({ models: [] });
+    } catch (error) {
+        console.error('[LM Studio] Error listing models:', error.message);
+        // Return empty array on error (expected when LM Studio is not running)
+        return res.json({ models: [] });
     }
 });
 

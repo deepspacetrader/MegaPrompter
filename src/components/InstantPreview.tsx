@@ -1,13 +1,14 @@
 import { motion } from 'framer-motion'
 import { Code, Database, Globe, Layers, Loader2, Server, Smartphone, Zap } from 'lucide-react'
 import { Fragment, useEffect, useMemo, useState } from 'react'
-import type { Selection } from '../types'
+import type { Selection, AIModelSettings } from '../types'
 
 interface InstantPreviewProps {
   selections: Selection[]
   generatedResult: { id: string, prompt: string } | null
   generatedJson: string
   selectedModel: string
+  aiModelSettings: AIModelSettings
   isOpen: boolean
   onClose: () => void
 }
@@ -158,7 +159,7 @@ const previewRegistry: any = {
         {element?.props?.title ? (
           <div className="flex items-start justify-between gap-3">
             <div className="text-sm font-semibold text-white/90">
-              {element?.props?.title}
+              {String(element?.props?.title)}
             </div>
           </div>
         ) : null}
@@ -177,26 +178,26 @@ const previewRegistry: any = {
             ? 'text-xs text-white/40'
             : 'text-sm text-white/70'
 
-    return <div className={cls}>{element?.props?.text}</div>
+    return <div className={cls}>{String(element?.props?.text ?? '')}</div>
   },
   Badge: ({ element }: any) => (
     <span className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white/60">
-      {element?.props?.text}
+      {String(element?.props?.text ?? '')}
     </span>
   ),
   List: ({ element, children }: any) => (
       <div className="space-y-2">
         {element?.props?.title ? (
-          <div className="text-xs font-semibold text-white/70">{element.props.title}</div>
+          <div className="text-xs font-semibold text-white/70">{String(element.props.title)}</div>
         ) : null}
         <div className="space-y-2">{children}</div>
       </div>
     ),
   ListItem: ({ element }: any) => (
     <div className="rounded-xl border border-white/10 bg-black/30 px-3 py-2">
-      <div className="text-xs font-semibold text-white/80">{element?.props?.title}</div>
+      <div className="text-xs font-semibold text-white/80">{String(element?.props?.title ?? '')}</div>
       {element?.props?.description ? (
-        <div className="text-xs text-white/50 mt-1">{element.props.description}</div>
+        <div className="text-xs text-white/50 mt-1">{String(element.props.description)}</div>
       ) : null}
     </div>
   ),
@@ -212,37 +213,37 @@ const previewRegistry: any = {
 
     return (
       <button type="button" className={`inline-flex items-center justify-center rounded-xl px-3 py-2 text-xs font-semibold ${cls}`}>
-        {element?.props?.text || 'Button'}
+        {String(element?.props?.text ?? 'Button')}
       </button>
     )
   },
   Input: ({ element }: any) => (
     <div className="space-y-1">
       {element?.props?.label ? (
-        <div className="text-[10px] font-semibold text-white/60">{element.props.label}</div>
+        <div className="text-[10px] font-semibold text-white/60">{String(element.props.label)}</div>
       ) : null}
       <div className="rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-xs text-white/50">
-        {element?.props?.placeholder || 'Enter value…'}
+        {String(element?.props?.placeholder ?? 'Enter value…')}
       </div>
     </div>
   ),
   Markdown: ({ element }: any) => (
     <div className="text-sm text-white/70 whitespace-pre-wrap">
-      {element?.props?.text}
+      {String(element?.props?.text ?? '')}
     </div>
   ),
   Placeholder: ({ element }: any) => (
     <div className="rounded-2xl border border-dashed border-white/15 bg-white/[0.02] p-4 space-y-2">
-      <div className="text-xs font-semibold text-white/70">{element?.props?.title}</div>
+      <div className="text-xs font-semibold text-white/70">{String(element?.props?.title ?? '')}</div>
       {element?.props?.description ? (
-        <div className="text-xs text-white/45">{element.props.description}</div>
+        <div className="text-xs text-white/45">{String(element.props.description)}</div>
       ) : null}
     </div>
   ),
   KeyValue: ({ element }: any) => (
     <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 space-y-2">
       {element?.props?.title ? (
-        <div className="text-xs font-semibold text-white/70">{element.props.title}</div>
+        <div className="text-xs font-semibold text-white/70">{String(element.props.title)}</div>
       ) : null}
       <div className="space-y-1">
         {(Array.isArray(element?.props?.items) ? element.props.items : []).slice(0, 12).map((it: any, idx: number) => (
@@ -279,7 +280,7 @@ const getCategoryColor = (category: string) => {
   }
 }
 
-export const InstantPreview = ({ selections, generatedResult, generatedJson, selectedModel, isOpen, onClose }: InstantPreviewProps) => {
+export const InstantPreview = ({ selections, generatedResult, generatedJson, selectedModel, aiModelSettings, isOpen, onClose }: InstantPreviewProps) => {
   if (!isOpen) return null
 
   // Note: generatedResult is currently unused; generatedJson is the source-of-truth for preview.
@@ -320,7 +321,7 @@ export const InstantPreview = ({ selections, generatedResult, generatedJson, sel
         const resp = await fetch('/api/ui-preview', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ megaPrompt: generatedResult.prompt, model: selectedModel })
+          body: JSON.stringify({ megaPrompt: generatedResult.prompt, model: selectedModel, aiSettings: aiModelSettings })
         })
 
         const data = await resp.json()
@@ -405,7 +406,7 @@ export const InstantPreview = ({ selections, generatedResult, generatedJson, sel
                 <div className="space-y-2">
                   <div className="text-sm text-red-400">{previewError}</div>
                   <div className="text-xs text-white/40">
-                    If Ollama isn't running or the model can't follow the JSON-only instruction, preview generation will fail.
+                    If LM Studio isn't running or the model can't follow the JSON-only instruction, preview generation will fail.
                   </div>
                 </div>
               ) : nestedPreview ? (

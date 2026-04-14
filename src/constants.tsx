@@ -74,7 +74,7 @@ export const PROJECT_TYPES: ProjectOption[] = [
                         features: [
                             { id: 'openai', label: 'OpenAI GPT-4/3.5', exclusive: false },
                             { id: 'anthropic', label: 'Anthropic Claude', exclusive: false },
-                            { id: 'ollama', label: 'Local Ollama Models', exclusive: false },
+                            { id: 'lm_studio', label: 'Local LM Studio Models', exclusive: false },
                             { id: 'langchain', label: 'LangChain Orchestration', exclusive: false },
                         ]
                     },
@@ -415,13 +415,14 @@ export const TRENDING_IDEATION: ProjectOption[] = [
 ];
 
 export const DEFAULT_MODELS = [
-  'llama3.2:latest',
-  'deepseek-r1:8b', 
-  'qwen2.5-coder:14b',
-  'mistral-nemo:latest',
-  'codellama:latest',
-  'glm-4.7-flash:q4_K_M',
-  'qwen3:8b'
+  'google/gemma-4-e4b',
+  'google/gemma-4-26b-a4b',
+  'unsloth/gemma-4-e4b-it',
+  'qwen2.5-vl-3b-instruct',
+  'qwen3.5-13b-glm-4.7-flash-grande-deep-thinking-i1',
+  'nvidia/nemotron-3-nano-4b',
+  'qwen3.5-27b-claude-4.6-opus-reasoning-distilled',
+  'liquid/lfm2-24b-a2b'
 ];
 
 export const RECOMMENDATIONS_MAP: Record<string, Selection> = {
