@@ -13,9 +13,8 @@ Also includes input fields so you can add write your own custom requirements if 
 # Getting Started
 
 ## Prerequisites
-- [Node.js](https://nodejs.org/) (v18 or higher)
-- [LM Studio](https://lmstudio.ai/) installed and running locally (for Generate Ideas With AI feature)
-- A model loaded in LM Studio (e.g., google/gemma-4-e4b)
+- [Node.js](https://nodejs.org/) or [bun](https://bun.com/)
+- [LM Studio](https://lmstudio.ai/) running any AI LLM model of your choice. Tested using google/gemma-4-e4b
 
 ## Installation
 
@@ -27,7 +26,6 @@ npm install
 # or if you prefer install using bun
 bun install
 ```
-
 
 ## Running the Application
 
@@ -45,14 +43,14 @@ This starts:
 - A frontend on port 5173 (or next available port)
 
 ## How To Use
-- Starting at Step 1 you can either start clicking through the options using your own defined vision or have the AI generate ideas for you to choose from.
-- Make sure you've got an AI model running in LM Studio on port 1234.
-- Toggle between Read From Cache or Download Fresh Data as needed before clicking to have the AI generate ideas.
+- Starting at Step 1 you can either start clicking through the options using your own defined vision or have the AI generate ideas for you to choose from
+- Make sure you've got an AI model running in LM Studio on port 1234
+- Toggle between Read From Cache or Download Fresh Data as needed before clicking to have the AI generate ideas
 - Fetches trending topics from RSS feeds (TechCrunch, The Verge, Wired, BBC Technology, MacRumors)
 - Uses local AI model via LM Studio to process results into trends then into project ideas
 - On Step 2 you can optionally further define the scope of the project
-- During Step 3 you can optionally remove any unwanted options directly from the list without having to go looking for them in the UI tree again.
-- On Step 4 you click to Generate The Mega Prompt which is then displayed in a text area ready for you to copy and paste into your AI coding assistant. At this point you can also click the See Preview button to see a rendered preview of the prompt using [json-render.dev](https://github.com/vercel-labs/json-render) (*works but not always*).
+- On Step 3 you can remove any unwanted options directly from the list without having to go looking for them in the UI tree again
+- On Step 4 you click to Generate The Mega Prompt which is then displayed in a text area ready for you to copy and paste into your AI coding assistant. At this point you can also click the See Preview button to see a rendered preview of the prompt using [json-render.dev](https://github.com/vercel-labs/json-render) (*works but not always*)
 
 # Screenshots
 
