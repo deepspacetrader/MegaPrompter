@@ -622,10 +622,13 @@ ${megaPrompt}
                         if (!el) return;
 
                         if (Array.isArray(el.children) && el.children.length > 0) {
-                            // Check if children are objects (need normalization) or strings (already normalized)
-                            if (typeof el.children[0] === 'object') {
-                                // Convert nested object children to string references
-                                const childKeys = el.children.map((child) => {
+                            // Handle mixed arrays (strings and objects)
+                            const childKeys = el.children.map((child) => {
+                                if (typeof child === 'string') {
+                                    // Already a string reference, keep as-is
+                                    return child;
+                                } else if (typeof child === 'object') {
+                                    // Convert nested object to string reference
                                     counter += 1;
                                     const childKey = child.key || `el_${counter}`;
                                     elements[childKey] = {
@@ -636,9 +639,10 @@ ${megaPrompt}
                                     // Recursively normalize the child
                                     normalizeElement(childKey);
                                     return childKey;
-                                });
-                                el.children = childKeys;
-                            }
+                                }
+                                return null;
+                            }).filter(Boolean); // Remove nulls
+                            el.children = childKeys;
                         }
                     };
 

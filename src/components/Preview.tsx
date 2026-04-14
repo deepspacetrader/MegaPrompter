@@ -147,7 +147,7 @@ export const Preview = ({
                     onClick={() => window.open(`http://localhost:3001/api/prompts/${generatedResult.id}`, '_blank')}
                     className="w-full py-4 rounded-xl border border-white/10 hover:bg-white/5 text-xs font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2"
                 >
-                    Open in API Explorer
+                    Open local plain text URL to this prompt
                     <ExternalLink className="w-3.5 h-3.5" />
                 </button>
             </div>

@@ -514,8 +514,8 @@ export const ProjectBuilder = ({
                                         className="flex flex-col gap-2"
                                     >
                                         <div className="flex gap-2">
-                                            <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/10 bg-white/5 flex-1">
-                                                <label className="text-[10px] font-bold tracking-wider text-white/60">
+                                            <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border flex-1 ${!useCache ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-white/5 border-white/10'}`}>
+                                                <label className={`text-[10px] font-bold tracking-wider ${!useCache ? 'text-emerald-400' : 'text-white/60'}`}>
                                                     Features per idea
                                                 </label>
                                                 <input
@@ -524,12 +524,12 @@ export const ProjectBuilder = ({
                                                     max="20"
                                                     value={featuresPerIdea}
                                                     onChange={(e) => setFeaturesPerIdea(Math.max(1, Math.min(20, parseInt(e.target.value) || 4)))}
-                                                    className="w-12 bg-white/10 border border-white/20 rounded px-2 py-1 text-xs text-white/80 text-center focus:outline-none focus:border-primary/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    className={`w-12 rounded px-2 py-1 text-xs text-center focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed ${!useCache ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 focus:border-emerald-500/50' : 'bg-white/10 border-white/20 text-white/80 focus:border-primary/50'}`}
                                                     disabled={isSyncing || useCache}
                                                 />
                                             </div>
-                                            <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/10 bg-white/5 flex-1">
-                                                <label className="text-[10px] font-bold tracking-wider text-white/60">
+                                            <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border flex-1 ${!useCache ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-white/5 border-white/10'}`}>
+                                                <label className={`text-[10px] font-bold tracking-wider ${!useCache ? 'text-emerald-400' : 'text-white/60'}`}>
                                                     Min ideas
                                                 </label>
                                                 <input
@@ -538,7 +538,7 @@ export const ProjectBuilder = ({
                                                     max="20"
                                                     value={minIdeasToGenerate}
                                                     onChange={(e) => setMinIdeasToGenerate(Math.max(1, Math.min(20, parseInt(e.target.value) || 5)))}
-                                                    className="w-12 bg-white/10 border border-white/20 rounded px-2 py-1 text-xs text-white/80 text-center focus:outline-none focus:border-primary/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    className={`w-12 rounded px-2 py-1 text-xs text-center focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed ${!useCache ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 focus:border-emerald-500/50' : 'bg-white/10 border-white/20 text-white/80 focus:border-primary/50'}`}
                                                     disabled={isSyncing || useCache}
                                                 />
                                             </div>
