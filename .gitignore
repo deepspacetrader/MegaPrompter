@@ -7,13 +7,17 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+bun.lock
+package-lock.json
+
 node_modules
 dist
 dist-ssr
 *.local
 
-storage/
-storage/*
+server/mega_prompts/*.json
+storage/*.json
+storage/mega_prompts/*.json
 
 # Editor directories and files
 .vscode/*

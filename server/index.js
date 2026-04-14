@@ -854,7 +854,7 @@ app.get('/api/models', async (req, res) => {
         }
 
         const data = response.data;
-        console.log('[LM Studio] Raw response data:', data);
+        // console.log('[LM Studio] Raw response data:', data);
 
         // LM Studio returns {models: [...]}
         if (Array.isArray(data.models)) {

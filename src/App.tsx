@@ -3,6 +3,7 @@ import type { Selection, ProjectOption, AIModelSettings } from './types'
 import { PROJECT_TYPES, DEFAULT_MODELS, RECOMMENDATIONS_MAP, ARCHITECT_SYSTEM_PROMPT } from './constants'
 import { Header } from './components/Header'
 import { Trends } from './components/Trends'
+import { TrendsModal } from './components/TrendsModal'
 import { HeadlineAnalysisModal } from './components/HeadlineAnalysisModal'
 import { ProjectBuilder } from './components/ProjectBuilder'
 import { ProjectRequirements } from './components/ProjectRequirements'
@@ -52,6 +53,7 @@ function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isInstantPreviewOpen, setIsInstantPreviewOpen] = useState(false);
   const [isRestartConfirmOpen, setIsRestartConfirmOpen] = useState(false);
+  const [isTrendsModalOpen, setIsTrendsModalOpen] = useState(false);
   const [lmStudioUrl, setLmStudioUrl] = useState('http://localhost:1234');
   const [systemPrompt, setSystemPrompt] = useState(ARCHITECT_SYSTEM_PROMPT);
   const [selectedHeadline, setSelectedHeadline] = useState<{
@@ -560,7 +562,7 @@ ${extraGuidance ? `### 5. EXTRA GUIDANCE & SPECIFIC REQUIREMENTS\n- ${extraGuida
           onRestart={() => setIsRestartConfirmOpen(true)}
         />
 
-        <Trends trends={trends} isLoading={isLoadingTrends} onAnalyzeHeadline={setSelectedHeadline} />
+        <Trends trends={trends} isLoading={isLoadingTrends} onAnalyzeHeadline={setSelectedHeadline} onOpenDetailedAnalysis={() => setIsTrendsModalOpen(true)} />
 
         <main className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           <ProjectBuilder
@@ -657,10 +659,18 @@ ${extraGuidance ? `### 5. EXTRA GUIDANCE & SPECIFIC REQUIREMENTS\n- ${extraGuida
 
 
       {/* Headline Analysis Modal - Rendered at top level for highest z-index */}
-      <HeadlineAnalysisModal 
+      <HeadlineAnalysisModal
         selectedHeadline={selectedHeadline}
         onClose={() => setSelectedHeadline(null)}
       />
+
+      {/* Trends Modal */}
+      {isTrendsModalOpen && trends && (
+        <TrendsModal
+          trends={trends}
+          onClose={() => setIsTrendsModalOpen(false)}
+        />
+      )}
     </div>
   )
 }
