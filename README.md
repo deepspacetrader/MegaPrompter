@@ -18,8 +18,10 @@ Also includes input fields so you can add write your own custom requirements if 
 
 ## Installation
 
-Using npm:
 ```bash
+git clone https://github.com/deepspacetrader/MegaPrompter
+cd MegaPrompter
+
 # install using npm
 npm install
 
@@ -28,19 +30,17 @@ bun install
 ```
 
 ## Running the Application
-
-The application runs both the frontend and backend together using concurrently:
+The app runs both the frontend and backend together using [concurrently](https://www.npmjs.com/package/concurrently).
+- Backend node server runs on port 3001 and fetches RSS feeds then generates AI-powered project ideas when you click "Generate Ideas With AI" also serves your generated Mega Prompts as plain text with unique URLs for your convenience. 
+- Frontend runs on port 5173 (or next available port)
 
 ```bash
 # run using npm
 npm run dev
 
-# or if you prefer run with bun
+# or run using bun
 bun dev
 ```
-This starts:
-- A backend node server on port 3001 that fetches RSS feeds and generates AI-powered project ideas when you click "Generate Ideas With AI".
-- A frontend on port 5173 (or next available port)
 
 ## How To Use
 - Starting at Step 1 you can either start clicking through the options using your own defined vision or have the AI generate ideas for you to choose from
